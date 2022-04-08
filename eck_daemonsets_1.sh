@@ -7,10 +7,10 @@ if [ ${count} = 0 ]; then
 fi
 
 echo "========================================================================================="
-echo "DaemonSet Summary - for details pleast look at ds_details-<name>.txt"
+echo "DaemonSet Summary - for details pleast look at eck_daemonset-<name>.txt"
 echo "========================================================================================="
 echo ""
-# might error if more than 1 container per ds
+### GOOD EXAMPLE
 jq -r '
 [.items
 | sort_by(.metdata.name)[]
@@ -21,18 +21,29 @@ jq -r '
     "Ready": (.status.numberReady // "-"),
     "Up-2-Date": (.status.updatedNumberScheduled // "-"),
     "Availabile": (.status.numberAvailable // "-"),
-    "Owner": (.metadata.ownerReferences[] | select(.controller==true) |.kind + "/" + .name // "-"),
-    "Selector": (.spec.selector.matchLabels |tostring // "-"),
-    "Containers": (.spec.template.spec.containers[].name // "-"),
-    "Images": (.spec.template.spec.containers[].image // "-"),
     "CreationTimestamp": (.metadata.creationTimestamp // "-")
-  }
-]
-| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  | column -ts $'\t'
 echo ""
 
 echo "========================================================================================="
-echo "DaemonSet Pod Template Specs"
+echo "DaemonSet Summary - wide with more details"
+echo "========================================================================================="
+echo ""
+### GOOD EXAMPLE
+jq -r '
+[.items
+| sort_by(.metdata.name)[]
+| {
+    "Name": (.metadata.name // "-"),
+    "apiVersion": (.metadata.ownerReferences[] | select(.controller==true) |.apiVersion // "-"),
+    "Owner": (.metadata.ownerReferences[] | select(.controller==true) |.kind + "/" + .name // "-"),
+    "Containers": ([.spec.template.spec.containers[].name]|join(",") // "-"),
+    "Images": ([.spec.template.spec.containers[].image]|join(",") // "-")
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  | column -ts $'\t'
+echo ""
+
+echo "========================================================================================="
+echo "DaemonSet SPEC"
 echo "========================================================================================="
 echo ""
 jq -r '
@@ -40,13 +51,37 @@ jq -r '
 | sort_by(.metdata.name)[]
 | {
     "Name": (.metadata.name // "-"),
+    "Selector": ([(.spec.selector.matchLabels)| (to_entries[] | "\(.key)=\(.value)")] | join(",") // "-"),
     "Update Type": (.spec.updateStrategy.type // "-"),
     "Max Surge": (.spec.updateStrategy.rollingUpdate.maxSurge // "-"),
     "Max Unavail": (.spec.updateStrategy.rollingUpdate.maxUnavailable // "-")
-  }
-]
-| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t'
 echo ""
+
+
+echo "========================================================================================="
+echo "Labels & Annotations"
+echo "========================================================================================="
+echo ""
+
+for ((i=0; i<$count; i++))
+do
+  ds=`jq -r '.items['${i}'].metadata.name' ${1}`
+  echo "---------------------------------- DaemonSet: ${ds} Labels"
+  echo ""
+  jq -r '.items['${i}'].metadata.labels | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null 
+  echo ""
+  echo "---------------------------------- DaemonSet: ${ds} Annotations"
+  echo ""
+  jq -r '.items['${i}'].metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null 
+done
+
+
+
+
+exit
+######################################################
+# dont think i need this 
 
 for ((i=0; i<$count; i++))
 do
@@ -101,12 +136,12 @@ do
   
   echo "------------------------------------------------------------------------------------  Labels"
   echo ""
-  jq -r '.items['${i}'].spec.template.metadata.labels | (to_entries[] | "\(.key) : \(.value)"), "" | select(length >0)' ${1} 2>/dev/null 
+  jq -r '.items['${i}'].spec.template.metadata.labels | (to_entries[] | "\(.key):\(.value)") | select(length >0)' ${1} 2>/dev/null 
   echo ""
   
   echo "------------------------------------------------------------------------------------  Annotations"
   echo ""
-  jq -r '.items['${i}'].spec.template.metadata.annotations | (to_entries[] | "\(.key) : \(.value)"), "" | select(length >0)' ${1} 2>/dev/null 
+  jq -r '.items['${i}'].spec.template.metadata.annotations | (to_entries[] | "\(.key):\(.value)") | select(length >0)' ${1} 2>/dev/null 
   echo ""
 
 

@@ -28,6 +28,7 @@ do
   if [ -e ${WORKDIR}/${namespace}/events.json ]&& [ $(du ${WORKDIR}/${namespace}/events.json | cut -f1) -gt 9 ]; then
     echo "|-- [DEBUG] Parsing events.json"
     ${SCRIPTDIR}/eck_events_1.sh ${WORKDIR}/${namespace}/events.json > ${WORKDIR}/${namespace}/eck_events.txt 2>/dev/null
+    echo "|-- [DEBUG] Parsing events.json per kind"
     for kind in `cat ${WORKDIR}/${namespace}/eck_events.txt | grep -v creationTime | grep -v "======" | awk {' print $4 '} | sort -n | uniq`
     do
       echo "---------- KIND: ${kind} -----------------------------------------------------------------"
@@ -81,32 +82,32 @@ do
 
 # ------
 
-##  # collect daemonsets.json
-##  if [ -e ${WORKDIR}/${namespace}/daemonsets.json ] && [ $(du ${WORKDIR}/${namespace}/daemonsets.json | cut -f1) -gt 9 ]; then
-##    echo "|-- [DEBUG] Parsing daemonsets"
-##    ${SCRIPTDIR}/eck_daemonsets_1.sh ${WORKDIR}/${namespace}/daemonsets.json > ${WORKDIR}/${namespace}/eck_daemonsets.txt
-##    
-##    dslist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/daemonsets.json`
-##    
-##    for ds in ${dslist}
-##    do
-##      export ds
-##      ${SCRIPTDIR}/eck_daemonsets_2.sh ${WORKDIR}/${namespace}/daemonsets.json > ${WORKDIR}/${namespace}/eck_daemonset-${ds}.txt    
-##      unset ds
-##    done
-##  fi
+  # collect daemonsets.json
+  if [ -e ${WORKDIR}/${namespace}/daemonsets.json ] && [ $(du ${WORKDIR}/${namespace}/daemonsets.json | cut -f1) -gt 9 ]; then
+    echo "|-- [DEBUG] Parsing DaemonSets"
+    ${SCRIPTDIR}/eck_daemonsets_1.sh ${WORKDIR}/${namespace}/daemonsets.json > ${WORKDIR}/${namespace}/eck_daemonsets.txt
+    
+    dslist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/daemonsets.json`
+    echo "|-- [DEBUG] Parsing DaemonSets per DaemonSet"
+    for ds in ${dslist}
+    do
+      export ds
+      ${SCRIPTDIR}/eck_daemonsets_2.sh ${WORKDIR}/${namespace}/daemonsets.json > ${WORKDIR}/${namespace}/eck_daemonset-${ds}.txt    
+      unset ds
+    done
+  fi
 
   # collect statefulsets.json
   if [ -e ${WORKDIR}/${namespace}/statefulsets.json ] && [ $(du ${WORKDIR}/${namespace}/statefulsets.json | cut -f1) -gt 9 ]; then
-    echo "|-- [DEBUG] Parsing statefulsets"
+    echo "|-- [DEBUG] Parsing StatefulSets"
     ${SCRIPTDIR}/eck_statefulsets_1.sh ${WORKDIR}/${namespace}/statefulsets.json > ${WORKDIR}/${namespace}/eck_statefulsets.txt
     
     sslist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/statefulsets.json`
-    
+    echo "|-- [DEBUG] Parsing StatefulSets per StatefulSet"
     for ss in ${sslist}
     do
       export ss
-      ${SCRIPTDIR}/eck_statefulsets_2.sh ${WORKDIR}/${namespace}/statefulsets.json > ${WORKDIR}/${namespace}/eck_statefulsets-${ss}.txt    
+      ${SCRIPTDIR}/eck_statefulsets_2.sh ${WORKDIR}/${namespace}/statefulsets.json > ${WORKDIR}/${namespace}/eck_statefulset-${ss}.txt    
       unset ss
     done
   fi
