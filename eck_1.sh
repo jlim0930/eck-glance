@@ -26,9 +26,9 @@ do
   
   # sort and collect events
   if [ -e ${WORKDIR}/${namespace}/events.json ]&& [ $(du ${WORKDIR}/${namespace}/events.json | cut -f1) -gt 9 ]; then
-    echo "|-- [DEBUG] Parsing events.json"
+    echo "|-- [DEBUG] Parsing events"
     ${SCRIPTDIR}/eck_events_1.sh ${WORKDIR}/${namespace}/events.json > ${WORKDIR}/${namespace}/eck_events.txt 2>/dev/null
-    echo "|-- [DEBUG] Parsing events.json per kind"
+    echo "|-- [DEBUG] Parsing events per kind"
     for kind in `cat ${WORKDIR}/${namespace}/eck_events.txt | grep -v creationTime | grep -v "======" | awk {' print $4 '} | sort -n | uniq`
     do
       echo "---------- KIND: ${kind} -----------------------------------------------------------------"
@@ -36,7 +36,10 @@ do
       cat ${WORKDIR}/${namespace}/eck_events.txt | grep "${kind}"
       echo ""
     done > ${WORKDIR}/${namespace}/eck_events-sorted.txt 2>/dev/null # end kind loop
+  else
+    touch ${WORKDIR}/${namespace}/eck_events.txt
   fi
+
 
 #  # elasticsearch.json
 #  if [ -e ${WORKDIR}/${namespace}/elasticsearch.json ] && [ $(du ${WORKDIR}/${namespace}/elasticsearch.json | cut -f1) -gt 9 ]; then
@@ -82,65 +85,69 @@ do
 
 # ------
 
-  # collect daemonsets.json
-  if [ -e ${WORKDIR}/${namespace}/daemonsets.json ] && [ $(du ${WORKDIR}/${namespace}/daemonsets.json | cut -f1) -gt 9 ]; then
-    echo "|-- [DEBUG] Parsing DaemonSets"
-    ${SCRIPTDIR}/eck_daemonsets_1.sh ${WORKDIR}/${namespace}/daemonsets.json > ${WORKDIR}/${namespace}/eck_daemonsets.txt
+##  # collect daemonsets.json
+##  # v4
+##  if [ -e ${WORKDIR}/${namespace}/daemonsets.json ] && [ $(du ${WORKDIR}/${namespace}/daemonsets.json | cut -f1) -gt 9 ]; then
+##    echo "|-- [DEBUG] Parsing DaemonSets"
+##    ${SCRIPTDIR}/eck_daemonsets_1.sh ${WORKDIR}/${namespace}/daemonsets.json > ${WORKDIR}/${namespace}/eck_daemonsets.txt
     
-    dslist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/daemonsets.json`
-    echo "|-- [DEBUG] Parsing DaemonSets per DaemonSet"
-    for ds in ${dslist}
+##    dslist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/daemonsets.json`
+##    echo "|-- [DEBUG] Parsing DaemonSets per DaemonSet"
+##    for ds in ${dslist}
+##    do
+##      export ds
+##      ${SCRIPTDIR}/eck_daemonsets_2.sh ${WORKDIR}/${namespace}/daemonsets.json > ${WORKDIR}/${namespace}/eck_daemonset-${ds}.txt    
+##      unset ds
+##    done
+##  fi
+
+##  # collect statefulsets.json
+##  # v4
+##  if [ -e ${WORKDIR}/${namespace}/statefulsets.json ] && [ $(du ${WORKDIR}/${namespace}/statefulsets.json | cut -f1) -gt 9 ]; then
+##    echo "|-- [DEBUG] Parsing StatefulSets"
+##    ${SCRIPTDIR}/eck_statefulsets_1.sh ${WORKDIR}/${namespace}/statefulsets.json > ${WORKDIR}/${namespace}/eck_statefulsets.txt
+    
+##    sslist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/statefulsets.json`
+##    echo "|-- [DEBUG] Parsing StatefulSets per StatefulSet"
+##    for ss in ${sslist}
+##    do
+##      export ss
+##      ${SCRIPTDIR}/eck_statefulsets_2.sh ${WORKDIR}/${namespace}/statefulsets.json > ${WORKDIR}/${namespace}/eck_statefulset-${ss}.txt    
+##      unset ss
+##    done
+##  fi
+
+##  # collect replicasets.json
+##  # v4
+##  if [ -e ${WORKDIR}/${namespace}/replicasets.json ] && [ $(du ${WORKDIR}/${namespace}/replicasets.json | cut -f1) -gt 9 ]; then
+##    echo "|-- [DEBUG] Parsing ReplicaSets"
+##    ${SCRIPTDIR}/eck_replicasets_1.sh ${WORKDIR}/${namespace}/replicasets.json > ${WORKDIR}/${namespace}/eck_replicasets.txt
+    
+##    rslist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/replicasets.json`
+##    echo "|-- [DEBUG] Parsing ReplicaSets per ReplicaSet"
+##    for rs in ${rslist}
+##    do
+##      export rs
+##      ${SCRIPTDIR}/eck_replicasets_2.sh ${WORKDIR}/${namespace}/replicasets.json > ${WORKDIR}/${namespace}/eck_replicaset-${rs}.txt    
+##      unset rs
+##    done
+##  fi
+
+  # collect pods.json
+  # v5
+  if [ -e ${WORKDIR}/${namespace}/pods.json ] && [ $(du ${WORKDIR}/${namespace}/pods.json | cut -f1) -gt 9 ]; then
+    echo "|-- [DEBUG] Parsing Pods"
+    ${SCRIPTDIR}/eck_pods_1.sh ${WORKDIR}/${namespace}/pods.json > ${WORKDIR}/${namespace}/eck_pods.txt
+    
+    podlist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/pods.json`
+    echo "|-- [DEBUG] Parsing Pods per pod"
+    for pod in ${podlist}
     do
-      export ds
-      ${SCRIPTDIR}/eck_daemonsets_2.sh ${WORKDIR}/${namespace}/daemonsets.json > ${WORKDIR}/${namespace}/eck_daemonset-${ds}.txt    
-      unset ds
+      export pod
+      ${SCRIPTDIR}/eck_pods_2.sh ${WORKDIR}/${namespace}/pods.json > ${WORKDIR}/${namespace}/eck_pod-${pod}.txt    
+      unset pod
     done
   fi
-
-  # collect statefulsets.json
-  if [ -e ${WORKDIR}/${namespace}/statefulsets.json ] && [ $(du ${WORKDIR}/${namespace}/statefulsets.json | cut -f1) -gt 9 ]; then
-    echo "|-- [DEBUG] Parsing StatefulSets"
-    ${SCRIPTDIR}/eck_statefulsets_1.sh ${WORKDIR}/${namespace}/statefulsets.json > ${WORKDIR}/${namespace}/eck_statefulsets.txt
-    
-    sslist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/statefulsets.json`
-    echo "|-- [DEBUG] Parsing StatefulSets per StatefulSet"
-    for ss in ${sslist}
-    do
-      export ss
-      ${SCRIPTDIR}/eck_statefulsets_2.sh ${WORKDIR}/${namespace}/statefulsets.json > ${WORKDIR}/${namespace}/eck_statefulset-${ss}.txt    
-      unset ss
-    done
-  fi
-
-  # collect replicasets.json
-  if [ -e ${WORKDIR}/${namespace}/replicasets.json ] && [ $(du ${WORKDIR}/${namespace}/replicasets.json | cut -f1) -gt 9 ]; then
-    echo "|-- [DEBUG] Parsing ReplicaSets"
-    ${SCRIPTDIR}/eck_replicasets_1.sh ${WORKDIR}/${namespace}/replicasets.json > ${WORKDIR}/${namespace}/eck_replicasets.txt
-    
-    rslist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/replicasets.json`
-    echo "|-- [DEBUG] Parsing ReplicaSets per ReplicaSet"
-    for rs in ${rslist}
-    do
-      export rs
-      ${SCRIPTDIR}/eck_replicasets_2.sh ${WORKDIR}/${namespace}/replicasets.json > ${WORKDIR}/${namespace}/eck_replicaset-${rs}.txt    
-      unset rs
-    done
-  fi
-
-#  # collect pods.json
-#  if [ -e ${WORKDIR}/${namespace}/pods.json ] && [ $(du ${WORKDIR}/${namespace}/pods.json | cut -f1) -gt 9 ]; then
-#    echo "|-- [DEBUG] Parsing pods"
-#    ${SCRIPTDIR}/eck_pods_1.sh ${WORKDIR}/${namespace}/pods.json > ${WORKDIR}/${namespace}/pods.txt
-#    
-#    podlist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/pods.json`
-#    
-#    for pod in ${podlist}
-#    do
-#      export pod
-#      ${SCRIPTDIR}/eck_pods_2.sh ${WORKDIR}/${namespace}/pods.json > ${WORKDIR}/${namespace}/eck_pod-${pod}.txt    
-#      unset pod
-#    done
-#  fi
 
 #  # collect controllerrevisions.json
 #  # - does this need a detailed one?

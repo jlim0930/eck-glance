@@ -87,6 +87,8 @@ jq -r '.items[].metadata.managedFields' ${1} 2>/dev/null
 
 
 exit
+
+
 ######################################################
 # dont think i need this 
 
@@ -153,12 +155,3 @@ do
 
 
 done
-
-echo ""
-echo ""
-echo "========================================================================================="
-echo "DaemonSet managedFields dump"
-echo "========================================================================================="
-echo ""
-jq -r '.items[].metadata.managedFields' ${1} 2>/dev/null
-
