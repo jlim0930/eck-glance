@@ -20,6 +20,7 @@ jq -r '
     "READY": (( ([.status.containerStatuses[]|select((.ready|tostring)=="true")]|length|tostring) + "/" + ([.status.containerStatuses[].name]|length|tostring) )// "-"),
     "STATUS": (.status.containerStatuses[].state|to_entries[].key // "-"),
     "RESTARTS": (.status.containerStatuses[].restartCount // "-"),
+    "LAST STARTTIME": (.status.startTime // "-"),
     "NODE": (.spec.nodeName // "-"),
     "CREATED": (.metadata.creationTimestamp // "-")
   }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t'
@@ -42,6 +43,8 @@ jq -r '
     "IMAGES": ([.spec.containers[].image]|join(",") // "-")
   }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
 echo ""
+
+#
 
 # STATUS TABLE
 echo "========================================================================================="
