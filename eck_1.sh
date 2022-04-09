@@ -10,6 +10,9 @@ export SCRIPTDIR
 # export WORKDIR
 
 
+# TODO
+# ones with loops move managedFields to individual ones
+
 # diag for k8s nodes
 if [ -e ${WORKDIR}/nodes.json ] && [ $(du ${WORKDIR}/${namespace}/nodes.json | cut -f1) -gt 9 ]; then
   echo "[DEBUG] Parsing kubernetes worker nodes"
@@ -167,8 +170,9 @@ do
 ##  fi
 
   # configmaps.json
+  # v5
   if [ -e ${WORKDIR}/${namespace}/configmaps.json ] && [ $(du ${WORKDIR}/${namespace}/configmaps.json | cut -f1) -gt 9 ]; then
-    echo "|-- [DEBUG] Parsing configmaps.json"
+    echo "|-- [DEBUG] Parsing ConfigMaps"
     ${SCRIPTDIR}/eck_configmaps_1.sh ${WORKDIR}/${namespace}/configmaps.json > ${WORKDIR}/${namespace}/eck_configmaps.txt
   fi
 
@@ -178,11 +182,12 @@ do
 #    ${SCRIPTDIR}/eck_deployments_1.sh ${WORKDIR}/${namespace}/deployments.json > ${WORKDIR}/${namespace}/deployments.txt
 #  fi
 
-#  # endpoints.json
-#  if [ -e ${WORKDIR}/${namespace}/endpoints.json ] && [ $(du ${WORKDIR}/${namespace}/endpoints.json | cut -f1) -gt 9 ]; then
-#    echo "|-- [DEBUG] Parsing endpoints.json"
-#    ${SCRIPTDIR}/eck_endpoints_1.sh ${WORKDIR}/${namespace}/endpoints.json > ${WORKDIR}/${namespace}/endpoints.txt
-#  fi
+  # endpoints.json
+  # v5
+  if [ -e ${WORKDIR}/${namespace}/endpoints.json ] && [ $(du ${WORKDIR}/${namespace}/endpoints.json | cut -f1) -gt 9 ]; then
+    echo "|-- [DEBUG] Parsing Endpoints"
+    ${SCRIPTDIR}/eck_endpoints_1.sh ${WORKDIR}/${namespace}/endpoints.json > ${WORKDIR}/${namespace}/eck_endpoints.txt
+  fi
 
 #  # networkpolicies.json
 #  if [ -e ${WORKDIR}/${namespace}/networkpolicies.json ] && [ $(du ${WORKDIR}/${namespace}/networkpolicies.json | cut -f1) -gt 9 ]; then

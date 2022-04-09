@@ -7,6 +7,7 @@ if [ ${count} = 0 ]; then
 fi
 
 # FIX - for some reason I can not get owner to go on the summary list. need to fix and move apiversion and remove the details sction
+echo ""
 echo "========================================================================================="
 echo "ConfigMaps Summary"
 echo "========================================================================================="
@@ -68,6 +69,12 @@ do
 done # end of i (main loop)
 echo ""
 echo ""
+
+printf "%-20s \n" "Events:"
+cat ${WORKDIR}/${namespace}/eck_events.txt | grep "ConfigMap"
+echo ""
+
+echo ""
 echo ""
 
 
@@ -79,9 +86,6 @@ do
   echo "========================================================================================="
   echo ""
   echo ""
-
-  # name
-  echo ${configmap}
 
   # namespace
   value=$(jq -r '.items[] | select(.metadata.name=="'${configmap}'") | (.metadata.namespace // "-")' ${1} 2>/dev/null)
@@ -103,3 +107,11 @@ do
   echo ""
 done # end of i (main loop)
 echo ""
+
+echo ""
+echo ""
+echo "========================================================================================="
+echo "Endpoints managedFields dump"
+echo "========================================================================================="
+echo ""
+jq -r '.items[].metadata.managedFields' ${1} 2>/dev/null

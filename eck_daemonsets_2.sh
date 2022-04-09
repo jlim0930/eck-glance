@@ -62,8 +62,6 @@ printf "%-20s %s \n" "Number of Nodes Misscheduled:" "${value}"
 value=$(jq -r '.items[] | select(.metadata.name=="'${ds}'") | (.metadata.creationTimestamp // "-")' ${1} 2>/dev/null)
 printf "%-20s %s \n" "CreationTimestamp:" "${value}"
 
-
-### change name from template
 printf "%-20s \n" "Events:"
 cat ${WORKDIR}/${namespace}/eck_events.txt | grep "DaemonSet/${ds}"
 echo ""
