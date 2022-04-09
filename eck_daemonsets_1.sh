@@ -67,11 +67,11 @@ echo ""
 for ((i=0; i<$count; i++))
 do
   ds=`jq -r '.items['${i}'].metadata.name' ${1}`
-  echo "---------------------------------- DaemonSet: ${ds} Labels"
+  echo "---------------------------------- Labels DaemonSet: ${ds}"
   echo ""
   jq -r '.items['${i}'].metadata.labels | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null 
   echo ""
-  echo "---------------------------------- DaemonSet: ${ds} Annotations"
+  echo "----------------------------- Annotations DaemonSet: ${ds}"
   echo ""
   jq -r '.items['${i}'].metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null 
 done

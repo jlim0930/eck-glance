@@ -19,7 +19,7 @@ jq -r '
     "Ready": ((.status.readyReplicas|tostring) + "/" + (.status.replicas|tostring) // "-"),
     "Collision Count": ((.status.collisionCount|tostring) // "-"),
     "CreationTimestamp": (.metadata.creationTimestamp // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t'
 echo ""
 
 echo "========================================================================================="
@@ -35,7 +35,7 @@ jq -r '
     "Owner": (.metadata.ownerReferences[] | select(.controller==true) |.kind + "/" + .name // "-"),
     "Containers": ([.spec.template.spec.containers[].name]|join(",") // "-"),
     "Images": ([.spec.template.spec.containers[].image]|join(",") // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t'
 echo ""
 
 echo "========================================================================================="
@@ -47,8 +47,8 @@ jq -r '
 | sort_by(.metdata.name)[]
 | {
     "Name": (.metadata.name // "-"),
-    "Pod Management Policy": (.spec.PodManagementPolicy // "-"),
-    "Replicas" (.spec.replicas|tostring // "-"),
+    "Pod Mgmt Policy": (.spec.podManagementPolicy // "-"),
+    "Replicas": (.spec.replicas|tostring // "-"),
     "Service Name": (.spec.serviceName // "-"),
     "Update Strategy": (.spec.updateStrategy.type // "-"),
     "Selector": ([(.spec.selector.matchLabels)| (to_entries[] | "\(.key)=\(.value)")] | join(",") // "-")
@@ -82,12 +82,12 @@ echo ""
 
 for ((i=0; i<$count; i++))
 do
-  ds=`jq -r '.items['${i}'].metadata.name' ${1}`
-  echo "---------------------------------- DaemonSet: ${ds} Labels"
+  ss=`jq -r '.items['${i}'].metadata.name' ${1}`
+  echo "---------------------------------- Labels DaemonSet: ${ss}"
   echo ""
   jq -r '.items['${i}'].metadata.labels | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null 
   echo ""
-  echo "---------------------------------- DaemonSet: ${ds} Annotations"
+  echo "----------------------------- Annotations DaemonSet: ${ss}"
   echo ""
   jq -r '.items['${i}'].metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null 
 done
