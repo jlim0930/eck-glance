@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 echo "========================================================================================="
-echo "${ss} - Statefulset DESCRIBE"
+echo "${ss} - StatefulSet DESCRIBE"
 echo "========================================================================================="
 echo ""
 
@@ -9,16 +9,8 @@ echo ""
 printf "%-20s %s\\n" "Name:" "${ss}"
 
 # namespace
-value=$(jq -r '.items[] | select(.metadata.name=="'${ss}'") | (.metadata.namespace // "-")' ${1} 2>/dev/null)
+value=$(jq -r '.items[] | (.metadata.namespace // "-")' ${1} 2>/dev/null)
 printf "%-20s %s \n" "Namespace:" "${value}"
-
-# CreationTimestamp
-value=$(jq -r '.items[] | select(.metadata.name=="'${ss}'") | (.metadata.creationTimestamp // "-")' ${1} 2>/dev/null)
-printf "%-20s %s \n" "CreationTimestamp:" "${value}"
-
-# selector
-printf "%-20s \n" "Selectors:"
-jq -r '.items[] | select(.metadata.name=="'${ss}'").spec.selector.matchLabels | (to_entries[] | "\(.key)=\(.value)"), "" | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
 
 # labels
 printf "%-20s \n" "Labels:"
@@ -27,52 +19,34 @@ jq -r '.items[] | select(.metadata.name=="'${ss}'").metadata.labels | (to_entrie
 # annotations
 printf "%-20s \n" "Annotations:"
 jq -r '.items[] | select(.metadata.name=="'${ss}'").metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
+echo ""
 
+# selector
+printf "%-20s \n" "Selectors:"
+jq -r '.items['${i}'].spec.selector.matchLabels | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
 
-
-##### SS specific stuff
-# replicas
-value=$(jq -r '.items[] | select(.metadata.name=="'${ss}'") | ((.status.replicas|tostring) + " desired | " + (.status.readyReplicas|tostring) + " total" // "-")' ${1} 2>/dev/null)
-printf "%-20s %s\\n" "Replicas:" "${value}"
-
-# updateStrategy
-value=$(jq -r '.items[] | select(.metadata.name=="'${ss}'") | (.spec.updateStrategy.type // "-")' ${1} 2>/dev/null)
-printf "%-20s %s\\n" "UpdateStrategy:" "${value}"
-
-# affinity
-value=$(jq -r '.items[] 
-| select(.metadata.name=="'${ss}'") 
-| (.spec.template.spec.affinity.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution[].podAffinityTerm.labelSelector.matchLabels
-|(to_entries[] | "\(.key)=\(.value)"))' ${1} 2>/dev/null)
-printf "%-20s %s\\n" "Affinity:" "${value}"
-##### SS specific stuff
-
-
-# apiVersion
-value=$(jq -r '.items[] | select(.metadata.name=="'${ss}'") | (.metadata.ownerReferences[] | select(.controller==true) |.apiVersion|tostring // "-")' ${1} 2>/dev/null)
-printf "%-20s %s\\n" "apiVersion:" "${value}"
+# apiversion
+value=$(jq -r '.items[] | select(.metadata.name=="'${ss}'") | (.metadata.ownerReferences[] | select(.controller==true) |.apiVersion // "-")' ${1} 2>/dev/null)
+printf "%-20s %s\\n" "API Version:" "${value}"
 
 # owner Reference
 value=$(jq -r '.items[] | select(.metadata.name=="'${ss}'") | (.metadata.ownerReferences[] | select(.controller==true) |.kind + "/" + .name // "-")' ${1} 2>/dev/null)
 printf "%-20s %s\\n" "Owner Reference:" "${value}"
-
-printf "%-20s \n" "Events:"
-cat ${WORKDIR}/${namespace}/eck_events.txt | grep "StatefulSet/${ss}"
 echo ""
 
-# volume claims
-printf "%-20s \n" "Volume Claims:"
-jq -r '
-[.items[] | select(.metadata.name=="'${ss}'")
-| {
-    "Name": .metadata.name} +
-      (.spec.volumeClaimTemplates[] | {
-        "VC Name": (.metadata.name // "-"),
-        "Request Size": (.spec.resources.requess.storage // "-"),
-        "Storage Class": (.spec.storageClassName // "-"),
-        "Volume Mode": (.spec.volumeMode // "-"),
-        "Status": (.status.phase // "-")
-  })] | (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t' | sed "s/^/  /g"
+
+#### stuff goes here
+####
+
+
+# CreationTimestamp
+value=$(jq -r '.items[] | select(.metadata.name=="'${ss}'") | (.metadata.creationTimestamp // "-")' ${1} 2>/dev/null)
+printf "%-20s %s \n" "CreationTimestamp:" "${value}"
+
+
+### change name from template
+printf "%-20s \n" "Events:"
+cat ${WORKDIR}/${namespace}/eck_events.txt | grep "StatefulSet/${ss}"
 echo ""
 
 # Pod Template
@@ -87,10 +61,17 @@ printf "%-20s \n" "  Annotations:"
 jq -r '.items[] | select(.metadata.name=="'${ss}'").spec.template.metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
 echo ""
 
+# Service Account
+value=$(jq -r '.items[] | select(.metadata.name=="'${ss}'") | (.spec.template.spec.serviceAccount // "-")' ${1} 2>/dev/null)
+printf "%-20s %s \n" "  Service Account:" "${value}"
+echo ""
+# volumes
 
 # volumes - configmap
 printf "%-20s \n" "  Volumes:"
-echo "ConfigMap" | sed "s/^/                     /"
+
+echo "------------------------------------------------------------------------------------  Volumes - ConfigMaps" | sed "s/^/  /"
+echo ""
 jq -r '
   [.items[]
   | select(.metadata.name=="'${ss}'")
@@ -105,7 +86,8 @@ jq -r '
 echo ""
 
 # volumes - secret
-echo "Secrets" | sed "s/^/                     /"
+echo "------------------------------------------------------------------------------------  Volumes - Secrets" | sed "s/^/  /"
+echo ""
 jq -r '
   [.items[]
   | select(.metadata.name=="'${ss}'")
@@ -119,8 +101,22 @@ jq -r '
   }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t' | sed "s/^/                     /"
 echo ""
 
+echo "------------------------------------------------------------------------------------  Volumes - hostPath" | sed "s/^/  /"
+echo ""
+jq -r '
+[.items[]
+| select(.metadata.name=="'${ss}'")
+| .spec.template.spec.volumes[]
+| select(.hostPath != null)
+| {
+    "Name": (.name // "-"),
+    "Path": (.hostPath.path // "-")
+}]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t' | sed "s/^/  /"
+echo ""
+
 # volumes - emptyDir
-echo "EmptyDir" | sed "s/^/                     /"
+echo "------------------------------------------------------------------------------------  Volumes - emptyDir" | sed "s/^/  /"
+echo ""
 jq -r '
   [.items[]
   | select(.metadata.name=="'${ss}'")
@@ -136,17 +132,18 @@ echo ""
 count=0
 # InitContainers
 count=`jq '.items[] | select(.metadata.name=="'${ss}'").spec.template.spec.initContainers | length' ${1} 2>/dev/null`
-if [ ${count} -gt 0 ] || [ -z ${count} ]; then
+if [ ${count} -gt 0 ]; then
   echo "========================================================================================="
   echo "StatefulSet: ${ss} POD Template InitContainers"
   echo "========================================================================================="
   echo ""
-
+  
   for ((i=0; i<$count; i++))
   do
     initcontainername=`jq -r '.items[] | select(.metadata.name=="'${ss}'").spec.template.spec.initContainers['${i}'].name' ${1}`
     echo "====== Container: ${initcontainername} ====================================================="
     echo ""
+    # initContainer Details
     jq -r '
     [.items[] | select(.metadata.name=="'${ss}'").spec.template.spec.initContainers['${i}']
     | {
@@ -160,6 +157,18 @@ if [ ${count} -gt 0 ] || [ -z ${count} ]; then
       }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null  | column -ts $'\t'
     echo ""
   
+    # InitContainer Network
+    echo "------------------------------------------------------------------------------------  Network"
+    jq -r '
+    [.items[] | select(.metadata.name=="'${ss}'").spec.template.spec.initContainers['${i}'].ports[]
+    | {
+      "Name": (.name // "-"),  
+      "InitContainer Port": (.InitContainerPort // "-"),
+      "Protocol": (.protocol // "-")
+    }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t'
+    echo ""
+
+    # initContainer Volumes
     echo "------------------------------------------------------------------------------------  Volumes"
     echo ""
     jq -r '
@@ -170,7 +179,13 @@ if [ ${count} -gt 0 ] || [ -z ${count} ]; then
       "ReadOnly": (.readOnly // "-")
     }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t'
     echo ""
+    
+    # initContainer args
+    echo "------------------------------------------------------------------------------------  ARGs"
+    jq -r '([.items[] | select(.metadata.name=="'${ss}'").spec.template.spec.initContainers['${i}'].args[]] |join(" ") // "-")' ${1} 2>/dev/null | sed 's/\\n/\n/g; s/\\t/\t/g'
+    echo ""
 
+    # initContainer ENVs
     echo "------------------------------------------------------------------------------------  ENVs"
     jq -r '
     [.items[] | select(.metadata.name=="'${ss}'").spec.template.spec.initContainers['${i}'].env[]
@@ -180,6 +195,7 @@ if [ ${count} -gt 0 ] || [ -z ${count} ]; then
     }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t'
     echo ""
 
+    # initContainer Command
     echo "------------------------------------------------------------------------------------  Command"
     jq -r '([.items[] | select(.metadata.name=="'${ss}'").spec.template.spec.initContainers['${i}'].command[]] |join(" ") // "-")' ${1} | sed 's/\\n/\n/g; s/\\t/\t/g' 2>/dev/null
     echo ""
@@ -192,7 +208,7 @@ echo ""
 count=0
 # CONTAINER SECTION
 count=`jq '.items[] | select(.metadata.name=="'${ss}'").spec.template.spec.containers | length' ${1} 2>/dev/null` 
-if [ ${count} -gt 0 ] || [ -z ${count} ]; then
+if [ ${count} -gt 0 ]; then
   echo "========================================================================================="
   echo "StatefulSet: ${ss} POD Template Containers"
   echo "========================================================================================="
@@ -202,6 +218,8 @@ if [ ${count} -gt 0 ] || [ -z ${count} ]; then
     containername=`jq -r '.items[] | select(.metadata.name=="'${ss}'").spec.template.spec.containers['${i}'].name' ${1}`
     echo "====== Container: ${containername} ====================================================="
     echo ""
+
+    # CONTAINER details
     jq -r '
     [.items[] | select(.metadata.name=="'${ss}'").spec.template.spec.containers['${i}']
     | {
@@ -234,6 +252,11 @@ if [ ${count} -gt 0 ] || [ -z ${count} ]; then
       "Mount Path": (.mountPath // "-"),
       "ReadOnly": (.readOnly // "-")
     }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t'
+    echo ""
+
+    # CONTAINER args
+    echo "------------------------------------------------------------------------------------  ARGs"
+    jq -r '([.items[] | select(.metadata.name=="'${ss}'").spec.template.spec.containers['${i}'].args[]] |join(" ") // "-")' ${1}  2>/dev/null | sed 's/\\n/\n/g; s/\\t/\t/g'
     echo ""
 
     # CONTAINER env

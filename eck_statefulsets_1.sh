@@ -10,7 +10,6 @@ echo "==========================================================================
 echo "StatefulSet Summary - for details pleast look at eck_statefulset-<name>.txt"
 echo "========================================================================================="
 echo ""
-# might error if more than 1 container per sts
 jq -r '
 [.items
 | sort_by(.metdata.name)[]
@@ -23,7 +22,7 @@ jq -r '
 echo ""
 
 echo "========================================================================================="
-echo "DaemonSet Summary - wide with more details"
+echo "StatefulSet Summary - wide with more details"
 echo "========================================================================================="
 echo ""
 jq -r '
@@ -55,8 +54,6 @@ jq -r '
   }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t'
 echo ""
 
-
-
 echo "========================================================================================="
 echo "StatefulSet SPEC Volume Claims"
 echo "========================================================================================="
@@ -76,7 +73,7 @@ jq -r '
 echo ""
 
 echo "========================================================================================="
-echo "Labels & Annotations"
+echo "Statefulset Labels & Annotations"
 echo "========================================================================================="
 echo ""
 
@@ -92,3 +89,10 @@ do
   jq -r '.items['${i}'].metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null 
 done
 
+echo ""
+echo ""
+echo "========================================================================================="
+echo "Statefulset managedFields dump"
+echo "========================================================================================="
+echo ""
+jq -r '.items[].metadata.managedFields' ${1} 2>/dev/null
