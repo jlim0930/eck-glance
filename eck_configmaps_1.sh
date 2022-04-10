@@ -6,7 +6,6 @@ if [ ${count} = 0 ]; then
  exit
 fi
 
-# FIX - for some reason I can not get owner to go on the summary list. need to fix and move apiversion and remove the details sction
 echo ""
 echo "========================================================================================="
 echo "ConfigMaps Summary"
@@ -21,53 +20,23 @@ jq -r '
     "CREATION TIME": (.metadata.creationTimestamp // "-")
   }
 ]
-| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
+| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t'
 echo ""
-
-# FOR FIX
-#jq -r '
-#[.items
-#| sort_by(.metdata.name)[]
-#| {
-#    "NAME": (.metadata.name // "-"),
-#    "DATA": (.data| length // "-"),
-#    "APIVERSION": (.metadata.ownerReferences[] | select(.controller==true) |.apiVersion // "-"), # BROKE
-#    "Owner": (.metadata.ownerReferences[] | select(.controller==true) |.kind + "/" + .name // "-"), # BROKE
-#    "CREATION TIME": (.metadata.creationTimestamp // "-")
-#  }
-#]
-#| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
-#echo ""
 
 echo "========================================================================================="
-echo "ConfigMaps Details"
+echo "ConfigMaps Owner"
 echo "========================================================================================="
 echo ""
-
-for ((i=0; i<$count; i++))
-do
-  configmap=`jq -r '.items['${i}'].metadata.name' ${1}`
-  echo "------ ConfigMap: ${configmap}---------------------------------------------------------------"
-  echo ""
-
-  # name
-  printf "%-20s %s\\n" "Name:" "${configmap}"
-
-  # namespace
-  value=$(jq -r '.items['${i}'] | (.metadata.namespace // "-")' ${1} 2>/dev/null)
-  printf "%-20s %s\\n" "Namespace:" "${value}"
-  
-  # apiVersion
-  value=$(jq -r '.items['${i}'] | select(.metadata.ownerReferences != null) |.metadata.ownerReferences[] | select(.controller==true) | ((.apiVersion) // "-")' ${1})
-  printf "%-20s %s\\n" "apiVersion :" "${value}"
-
-  # owner
-  value=$(jq -r '.items['${i}'] | select(.metadata.ownerReferences != null) |.metadata.ownerReferences[] | select(.controller==true) | ((.kind + "/" + .name) // "-")' ${1})
-  printf "%-20s %s\\n" "Owner:" "${value}"
-
-  echo ""
-done # end of i (main loop)
-echo ""
+jq -r '
+[.items
+| sort_by(.metdata.name)[]
+| {
+    "NAME": (.metadata.name // "-"),
+    "APIVERSION": (select(.metadata.ownerReferences != null) |.metadata.ownerReferences[] | select(.name !=null) | ((.apiVersion) // "-")),
+    "OWNER": (select(.metadata.ownerReferences != null) |.metadata.ownerReferences[] | select(.name !=null) | ((.name) // "-"))
+  }
+]
+| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t'
 echo ""
 
 printf "%-20s \n" "Events:"
