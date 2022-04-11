@@ -91,9 +91,7 @@ jq -r '
   | {
       "NAME": (.name // "-"),
       "CLAIM NAME": (.persistentVolumeClaim.claimName // "-")
-  }
-  ]
-  | (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t' | sed "s/^/                     /"
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t' | sed "s/^/                     /"
 echo ""
 
 # volumes - configmap
@@ -108,9 +106,7 @@ jq -r '
       "CONFIG MAP": (.configMap.name),
       "DEFAULT MODE": (.secret.defaultMode // "-"),
       "OPTIONAL": .secret.optional
-  }
-  ]
-  | (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t' | sed "s/^/                     /"
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t' | sed "s/^/                     /"
 echo ""
 
 # volumes - secret
@@ -125,8 +121,7 @@ jq -r '
       "SECRET NAME": (.secret.secretName // "-"),
       "DEFAULT MODE": (.secret.defaultMode // "-"),
       "OPTIONAL": .secret.optional
-  }  ]
-  | (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t' | sed "s/^/                     /"
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t' | sed "s/^/                     /"
 echo ""
 
 # volumes - emptyDir
@@ -138,9 +133,7 @@ jq -r '
   | select(.emptyDir != null)
   | {
       "NAME": (.name // "-")
-  }
-  ]
-  | (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t' | sed "s/^/                     /"
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t' | sed "s/^/                     /"
 
 echo ""
 printf "%-20s \n" "Events:"

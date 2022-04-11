@@ -79,11 +79,11 @@ jq -r '
     "NAME": (.metadata.name // "-"),
     "PRIORITY": (.spec.priority // "-"),
     "RESTART POLICY": (.spec.restartPolicy // "-"),
-    "SECURITY CONTEXT": (.spec.securityContext| (to_entries[] | "\(.key)=\(.value)") | select(length >0) // "-"),
     "SERVICE ACCT": (.spec.serviceAccount // "-"),
     "SCHEDULER": (.spec.schedulerName // "-"),
-    "SERVICE LINKS": (.spec.enableServiceLinks|tostring // "-"),
-    "AFFINITY": ((.spec.affinity.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution[].podAffinityTerm.labelSelector.matchLabels|(to_entries[] | "\(.key)=\(.value)"))? // "-")
+     "SECURITY CONTEXT": ((.spec.securityContext| (to_entries[] | "\(.key)=\(.value)") | select(length >0)) // "-"), 
+    "AFFINITY": ((.spec.affinity.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution[].podAffinityTerm.labelSelector.matchLabels|(to_entries[] | "\(.key)=\(.value)"))? // "-"),
+    "SERVICE LINKS": (.spec.enableServiceLinks|tostring // "-")
   }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  | column -ts $'\t'
 echo ""
 
@@ -94,8 +94,7 @@ echo ""
 # FIX - format a bit better
 jq -r '
 [.items[] 
-| {
-   "NAME": .metadata.name} + 
+| { "NAME": .metadata.name} + 
 (.spec.tolerations[] |{
   "KEY": (.key // "-"),
   "OPERATOR": (.operator // "-"),

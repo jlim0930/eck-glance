@@ -188,22 +188,22 @@ do
 ##     done
 ##   fi
 ## 
-##   # collect pods.json
-##   # v5
-##   if [ -e ${WORKDIR}/${namespace}/pods.json ] && [ $(du ${WORKDIR}/${namespace}/pods.json | cut -f1) -gt 9 ]; then
-##     echo "|-- [DEBUG] Parsing Pods"
-##     ${SCRIPTDIR}/eck_pods_1.sh ${WORKDIR}/${namespace}/pods.json > ${WORKDIR}/${namespace}/eck_pods.txt
-##     
-##     podlist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/pods.json`
-##     for pod in ${podlist}
-##     do
-##       echo "  |---- [DEBUG] Parsing Pod for ${pod}"
-##       export pod
-##       ${SCRIPTDIR}/eck_pods_2.sh ${WORKDIR}/${namespace}/pods.json > ${WORKDIR}/${namespace}/eck_pod-${pod}.txt    
-##       unset pod
-##     done
-##   fi
-## 
+  # collect pods.json
+  # v5
+  if [ -e ${WORKDIR}/${namespace}/pods.json ] && [ $(du ${WORKDIR}/${namespace}/pods.json | cut -f1) -gt 9 ]; then
+    echo "|-- [DEBUG] Parsing pods.json"
+    ${SCRIPTDIR}/eck_pods_1.sh ${WORKDIR}/${namespace}/pods.json > ${WORKDIR}/${namespace}/eck_pods.txt
+    
+    podlist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/pods.json`
+    for pod in ${podlist}
+    do
+      echo "  |---- [DEBUG] Parsing pods.json for ${pod}"
+      export pod
+      ${SCRIPTDIR}/eck_pods_2.sh ${WORKDIR}/${namespace}/pods.json > ${WORKDIR}/${namespace}/eck_pod-${pod}.txt    
+      unset pod
+    done
+  fi
+
   # collect controllerrevisions.json
   # v5
   if [ -e ${WORKDIR}/${namespace}/controllerrevisions.json ] && [ $(du ${WORKDIR}/${namespace}/controllerrevisions.json | cut -f1) -gt 9 ]; then
