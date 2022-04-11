@@ -27,9 +27,9 @@ do
   
   # sort and collect events
   if [ -e ${WORKDIR}/${namespace}/events.json ]&& [ $(du ${WORKDIR}/${namespace}/events.json | cut -f1) -gt 9 ]; then
-    echo "|-- [DEBUG] Parsing events"
+    echo "|-- [DEBUG] Parsing events.json"
     ${SCRIPTDIR}/eck_events_1.sh ${WORKDIR}/${namespace}/events.json > ${WORKDIR}/${namespace}/eck_events.txt 2>/dev/null
-    echo "|-- [DEBUG] Parsing events per kind"
+    echo "|-- [DEBUG] Parsing events.json per kind"
     for kind in `cat ${WORKDIR}/${namespace}/eck_events.txt | grep -v creationTime | grep -v "======" | awk {' print $4 '} | sort -n | uniq`
     do
       echo "---------- KIND: ${kind} -----------------------------------------------------------------"
@@ -278,12 +278,12 @@ do
 ##     ${SCRIPTDIR}/eck_secrets_1.sh ${WORKDIR}/${namespace}/secrets.json > ${WORKDIR}/${namespace}/eck_secrets.txt
 ##   fi
 ## 
-##   # serviceaccount.json
-##   # v5
-##   if [ -e ${WORKDIR}/${namespace}/serviceaccount.json ] && [ $(du ${WORKDIR}/${namespace}/serviceaccount.json | cut -f1) -gt 9 ]; then
-##     echo "|-- [DEBUG] Parsing ServiceAccount"
-##     ${SCRIPTDIR}/eck_serviceaccount_1.sh ${WORKDIR}/${namespace}/serviceaccount.json > ${WORKDIR}/${namespace}/eck_serviceaccount.txt
-##   fi
+  # serviceaccount.json
+  # v5
+  if [ -e ${WORKDIR}/${namespace}/serviceaccount.json ] && [ $(du ${WORKDIR}/${namespace}/serviceaccount.json | cut -f1) -gt 9 ]; then
+    echo "|-- [DEBUG] Parsing serviceaccount.json"
+    ${SCRIPTDIR}/eck_serviceaccount_1.sh ${WORKDIR}/${namespace}/serviceaccount.json > ${WORKDIR}/${namespace}/eck_serviceaccount.txt
+  fi
 ## 
   # services.json
   # v5

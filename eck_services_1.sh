@@ -81,11 +81,11 @@ do
 
   # annotations
   printf "%-20s \n" "Annotations:"
-  value=$(jq -r '.items['${i}'].metadata.annotations | (to_entries[] | "\(.key) : \(.value)"), "" | select(length >0)' ${1} 2>/dev/null) | sed "s/^/                     /"
+  value=$(jq -r '.items['${i}'].metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null) | sed "s/^/                     /"
   
   # selector
   printf "%-20s \n" "Selector:"
-  jq -r '.items['${i}'].spec.selector | (to_entries[] | "\(.key) : \(.value)"), "" | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
+  jq -r '.items['${i}'].spec.selector | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
   echo ""
 
   # type
