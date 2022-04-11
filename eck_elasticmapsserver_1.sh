@@ -8,7 +8,7 @@ fi
 
 echo "========================================================================================="
 #### make update
-echo "ELASTICSEARCH Summary - for details pleast look at eck_TEMPLATE2-<name>.txt"
+echo "ElasticMapServices Summary - for details pleast look at eck_TEMPLATE2-<name>.txt"
 echo "========================================================================================="
 echo ""
 
@@ -21,7 +21,6 @@ jq -r '
     "HEALTH": (.status.health // "-"),
     "NODES": (.status.availableNodes|tostring // "-"),
     "VERSION": (.status.version // "-"),
-    "PHASE": (.status.phase // "-"),
     "GENERATION": (.metadata.generation // "-"),
     "KIND": (.spec.type // "-"),
     "APIVERSION": (.apiVersion // "-"),
@@ -31,11 +30,11 @@ echo ""
 echo ""
 
 echo "========================================================================================="
-echo "ELASTICSEARCH Status & Referneces"
+echo "ElasticMapServices Status & Referneces"
 echo "========================================================================================="
 echo ""
 
-# ELASTICSEARCH
+# BEAT
 jq -r '
 [.items
 | sort_by(.metdata.name)[]
@@ -43,10 +42,13 @@ jq -r '
     "NAME": (.metadata.name // "-"),
     "SERVICE": (.status.service // "-"),
     "SECRET TOKEN": (.status.secretTokenSecret // "-"),
+    "ES REF": (.spec.elasticsearchRef.name // "-"),
+    "ES ASSOCIATION": (.status.elasticsearchAssociationStatus // "-"),
+    "KB REF": (.spec.kibanaRef.name // "-"),
+    "KB ASSOCIATION": (.status.kibanaAssociationStatus // "-"),
     "SELECTOR": (.status.selector // "-")
   }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
 echo ""
-
 
 
 

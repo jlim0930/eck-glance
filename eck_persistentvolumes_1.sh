@@ -15,30 +15,28 @@ jq -r '
 [.items
 | sort_by(.metdata.name)[]
 | {
-    "Name": (.metadata.name // "-"),
-    "Capacity": (.spec.capacity.storage // "-"),
-    "Access Modes": (.spec.accessModes[0] // "-"),
-    "Reclaim Policy": (.spec.persistentVolumeReclaimPolicy // "-"),
-    "Status": (.status.phase // "-"),
-    "Claim": (.spec.claimRef.namespace + "/" + .spec.claimRef.name // "-"),
-    "StorageClass": (.spec.storageClassName // "-"),
-    "VolumeMode": (.spec.volumeMode // "-"),
-    "CreationTimestamp": (.metadata.creationTimestamp // "-")
+    "NAME": (.metadata.name // "-"),
+    "CAPACITY": (.spec.capacity.storage // "-"),
+    "ACCESS MODE": (.spec.accessModes[0] // "-"),
+    "RECLAIM POLICY": (.spec.persistentVolumeReclaimPolicy // "-"),
+    "STATUS": (.status.phase // "-"),
+    "CLAIM": (.spec.claimRef.namespace + "/" + .spec.claimRef.name // "-"),
+    "STORAGECLASS": (.spec.storageClassName // "-"),
+    "VOLUME MODE": (.spec.volumeMode // "-"),
+    "CREATION TIME": (.metadata.creationTimestamp // "-")
   }
 ]
 | (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  | column -ts $'\t'
 echo ""
 
-
-echo "========================================================================================="
-echo "PersistentVolumes DETAILED"
-echo "========================================================================================="
-echo ""
+# FIX find a way to do better for disk detection and make a table
 
 for ((i=0; i<$count; i++))
 do
   pv=`jq -r '.items['${i}'].metadata.name' ${1}`
-  echo "------ PersistentVolume: ${pv}---------------------------------------------------------------"
+  echo "========================================================================================="
+  echo "PersistentVolumes: ${pv} DESCRIBE"
+  echo "========================================================================================="
   echo ""
 
   # name
@@ -101,9 +99,21 @@ do
   value=$(jq -r '.items['${i}'] | (.spec.'${type}'.readOnly|tostring // "-")' ${1} 2>/dev/null)
   printf "%-20s %s\\n" "    ReadOnly:" "${value}" 
 
-  # events
-  printf "%-20s \n" "Events:"
-  cat ${DIAGDIR}/${namespace}/events.txt | grep "PersistentVolume/${pv}"
-
+  echo ""
   echo ""
 done # end of i (main loop)
+
+printf "%-20s \n" "Events:"
+cat ${WORKDIR}/${namespace}/eck_events.txt | grep "ConfigMap"
+echo ""
+echo ""
+echo ""
+
+
+echo ""
+echo ""
+echo "========================================================================================="
+echo "Endpoints managedFields dump"
+echo "========================================================================================="
+echo ""
+jq -r '.items[].metadata.managedFields' ${1} 2>/dev/null
