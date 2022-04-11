@@ -15,13 +15,12 @@ jq -r '
 [.items
 | sort_by(.metdata.name)[]
 | {
-    "Name": (.metadata.name // "-"),
-    "Controller": (.metadata.ownerReferences[] | select(.controller=='true')| .kind + "/" + .name // "-"),
-    "Revision": (.revision // "-"),
-    "creationTimestamp": (.metadata.creationTimestamp // "-")
-  }
-]
-| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
+    "NAME": (.metadata.name // "-"),
+    "REVISION": (.revision // "-"),
+    "APIVERSION": (.metadata.ownerReferences[] | select(.controller=='true')| .apiVersion // "-"),
+    "CONTROLLER": (.metadata.ownerReferences[] | select(.controller=='true')| .kind + "/" + .name // "-"),
+    "CREATION TIME": (.metadata.creationTimestamp // "-")
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
 echo ""
 
 echo "========================================================================================="
@@ -41,11 +40,11 @@ do
 
   # labels
   printf "%-20s \n" "Labels:"
-  jq -r '.items['${i}'].metadata.labels | (to_entries[] | "\(.key) : \(.value)"), "" | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
+  jq -r '.items['${i}'].metadata.labels | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
 
   # annotations
   printf "%-20s \n" "Annotations:"
-  jq -r '.items['${i}'].metadata.annotations | (to_entries[] | "\(.key) : \(.value)"), "" | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
+  jq -r '.items['${i}'].metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
 
   echo ""
 done # end of i (main loop)

@@ -204,45 +204,45 @@ do
 ##     done
 ##   fi
 ## 
-##   # collect controllerrevisions.json
-##   # v3 kind of like pods and sets.. lots of info
-##   if [ -e ${WORKDIR}/${namespace}/controllerrevisions.json ] && [ $(du ${WORKDIR}/${namespace}/controllerrevisions.json | cut -f1) -gt 9 ]; then
-##     echo "|-- [DEBUG] Parsing ControllerRevisions"
-##     ${SCRIPTDIR}/eck_controllerrevisions_1.sh ${WORKDIR}/${namespace}/controllerrevisions.json > ${WORKDIR}/${namespace}/eck_controllerrevisions.txt
-##     
-##     crlist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/controllerrevisions.json`
-##     for cr in ${crlist}
-##     do
-##       echo "  |---- [DEBUG] Parsing ControllerRevisions for ${cr}"
-##       export cr
-##       ${SCRIPTDIR}/eck_controllerrevisions_2.sh ${WORKDIR}/${namespace}/controllerrevisions.json > ${WORKDIR}/${namespace}/eck_controllerrevision-${cr}.txt    
-##       unset cr
-##     done
-##   fi
-## 
+  # collect controllerrevisions.json
+  # v5
+  if [ -e ${WORKDIR}/${namespace}/controllerrevisions.json ] && [ $(du ${WORKDIR}/${namespace}/controllerrevisions.json | cut -f1) -gt 9 ]; then
+    echo "|-- [DEBUG] Parsing controllerrevisions.json"
+    ${SCRIPTDIR}/eck_controllerrevisions_1.sh ${WORKDIR}/${namespace}/controllerrevisions.json > ${WORKDIR}/${namespace}/eck_controllerrevisions.txt
+    
+    crlist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/controllerrevisions.json`
+    for cr in ${crlist}
+    do
+      echo "  |---- [DEBUG] Parsing controllerrevisions.json for ${cr}"
+      export cr
+      ${SCRIPTDIR}/eck_controllerrevisions_2.sh ${WORKDIR}/${namespace}/controllerrevisions.json > ${WORKDIR}/${namespace}/eck_controllerrevision-${cr}.txt    
+      unset cr
+    done
+  fi
+
   # configmaps.json
   # v5
   if [ -e ${WORKDIR}/${namespace}/configmaps.json ] && [ $(du ${WORKDIR}/${namespace}/configmaps.json | cut -f1) -gt 9 ]; then
     echo "|-- [DEBUG] Parsing configmaps.json"
     ${SCRIPTDIR}/eck_configmaps_1.sh ${WORKDIR}/${namespace}/configmaps.json > ${WORKDIR}/${namespace}/eck_configmaps.txt
   fi
-## 
-##   # deployments.json
-##   # v5
-##   if [ -e ${WORKDIR}/${namespace}/deployments.json ] && [ $(du ${WORKDIR}/${namespace}/deployments.json | cut -f1) -gt 9 ]; then
-##     echo "|-- [DEBUG] Parsing Deployments"
-##     ${SCRIPTDIR}/eck_deployments_1.sh ${WORKDIR}/${namespace}/deployments.json > ${WORKDIR}/${namespace}/eck_deployments.txt
-## 
-##     deployments=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/deployments.json`
-##     for deployment in ${deployments}
-##     do
-##       echo "  |---- [DEBUG] Parsing Deployments for ${deployment}"
-##       export deployment
-##       ${SCRIPTDIR}/eck_deployments_2.sh ${WORKDIR}/${namespace}/deployments.json > ${WORKDIR}/${namespace}/eck_deployment-${deployment}.txt    
-##       unset deployment
-##     done
-##   fi
-## 
+
+  # deployments.json
+  # v5
+  if [ -e ${WORKDIR}/${namespace}/deployments.json ] && [ $(du ${WORKDIR}/${namespace}/deployments.json | cut -f1) -gt 9 ]; then
+    echo "|-- [DEBUG] Parsing deployments.json"
+    ${SCRIPTDIR}/eck_deployments_1.sh ${WORKDIR}/${namespace}/deployments.json > ${WORKDIR}/${namespace}/eck_deployments.txt
+
+    deployments=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/deployments.json`
+    for deployment in ${deployments}
+    do
+      echo "  |---- [DEBUG] Parsing deployments.json for ${deployment}"
+      export deployment
+      ${SCRIPTDIR}/eck_deployments_2.sh ${WORKDIR}/${namespace}/deployments.json > ${WORKDIR}/${namespace}/eck_deployment-${deployment}.txt    
+      unset deployment
+    done
+  fi
+
   # endpoints.json
   # v5
   if [ -e ${WORKDIR}/${namespace}/endpoints.json ] && [ $(du ${WORKDIR}/${namespace}/endpoints.json | cut -f1) -gt 9 ]; then

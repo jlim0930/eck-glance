@@ -42,11 +42,11 @@ do
 
   # labels
   printf "%-20s \n" "Labels:"
-  jq -r '.items['${i}'].metadata.labels | (to_entries[] | "\(.key) : \(.value)"), "" | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
+  jq -r '.items['${i}'].metadata.labels | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
 
   # annotations
   printf "%-20s \n" "Annotations:"
-  jq -r '.items['${i}'].metadata.annotations | (to_entries[] | "\(.key) : \(.value)"), "" | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
+  jq -r '.items['${i}'].metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
 
   # finalizers
   printf "%-20s \n" "Finalizers:"

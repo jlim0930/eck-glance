@@ -35,7 +35,7 @@ printf "%-20s %s\\n" "Owner Reference:" "${value}"
 echo ""
 
 # Replicas
-value=$(jq -r '.items[] | select(.metadata.name=="'${deployment}'") | ((.status.replicas|tostring) + " desired | " + (.status.updatedReplicas|tostring) + " updated | " + (.status.readyReplicas|tostring) + " total | "  + (.status.availableReplicas|tostring) + " available"// "-")' ${1} 2>/dev/null)
+value=$(jq -r '.items[] | select(.metadata.name=="'${deployment}'") | ((.status.replicas|tostring // "-") + " desired | " + (.status.updatedReplicas|tostring // "-") + " updated | " + (.status.readyReplicas|tostring // "-") + " total | "  + (.status.availableReplicas|tostring // "-") + " available"// "-")' ${1} 2>/dev/null)
 printf "%-20s %s\\n" "Replicas:" "${value}"
 
 # StrategyType
@@ -79,6 +79,9 @@ echo ""
 #done
 #  echo -e ${string} |column -t -s "," | sed 's/^/    /g'
 #unset string
+printf "%-20s \n" "Conditions:"
+jq -r '.items[0].status.conditions[] | [ .type, .status, .reason, .lastUpdateTime, .lastTransitionTime, .message]|join(",")' ${1} | column -t -s "," | sed 's/^/  /g'
+echo ""
 
 # Pod Template
 printf "%-20s \n" "Pod Template:"

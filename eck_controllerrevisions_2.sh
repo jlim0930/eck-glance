@@ -24,24 +24,32 @@ printf "%-20s %s\\n" "apiVersion:" "${value}"
 
 # labels
 printf "%-20s \n" "Labels:"
-jq -r '.items[] | select(.metadata.name=="'${cr}'").metadata.labels | (to_entries[] | "\(.key) : \(.value)"), "" | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
+jq -r '.items[] | select(.metadata.name=="'${cr}'").metadata.labels | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
 
 # annotations
 printf "%-20s \n" "Annotations:"
-jq -r '.items[] | select(.metadata.name=="'${cr}'").metadata.annotations | (to_entries[] | "\(.key) : \(.value)"), "" | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
+jq -r '.items[] | select(.metadata.name=="'${cr}'").metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
   
 # events
 printf "%-20s \n" "Events:"
-cat ${DIAGDIR}/${namespace}/events.txt | grep "ControllerRevision/${cr}"
+cat ${WORKDIR}/${namespace}/eck_events.txt | grep "ControllerRevision/${cr}"
 echo ""
 
 # Template
 printf "%-20s \n" "Controller Revision Template:"
 # labels
 printf "%-20s \n" "  Labels:"
-jq -r '.items[] | select(.metadata.name=="'${cr}'").data.spec.template.metadata.labels | (to_entries[] | "\(.key) : \(.value)"), "" | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
+jq -r '.items[] | select(.metadata.name=="'${cr}'").data.spec.template.metadata.labels | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
 
 # annotations
 printf "%-20s \n" "  Annotations:"
-jq -r '.items[] | select(.metadata.name=="'${cr}'").data.spec.template.metadata.annotations | (to_entries[] | "\(.key) : \(.value)"), "" | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
+jq -r '.items[] | select(.metadata.name=="'${cr}'").data.spec.template.metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
 echo ""
+
+echo ""
+echo ""
+echo "========================================================================================="
+echo "${cr} DATA dump"
+echo "========================================================================================="
+echo ""
+jq -r '.items[].data' ${1} 2>/dev/null
