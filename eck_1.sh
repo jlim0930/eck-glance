@@ -271,13 +271,13 @@ do
 ##     ${SCRIPTDIR}/eck_persistentvolumes_1.sh ${WORKDIR}/${namespace}/persistentvolumes.json > ${WORKDIR}/${namespace}/eck_persistentvolumes.txt
 ##   fi
 ## 
-##   # secrets.json
-##   # v5
-##   if [ -e ${WORKDIR}/${namespace}/secrets.json ] && [ $(du ${WORKDIR}/${namespace}/secrets.json | cut -f1) -gt 9 ]; then
-##     echo "|-- [DEBUG] Parsing Secrets"
-##     ${SCRIPTDIR}/eck_secrets_1.sh ${WORKDIR}/${namespace}/secrets.json > ${WORKDIR}/${namespace}/eck_secrets.txt
-##   fi
-## 
+  # secrets.json
+  # v5
+  if [ -e ${WORKDIR}/${namespace}/secrets.json ] && [ $(du ${WORKDIR}/${namespace}/secrets.json | cut -f1) -gt 9 ]; then
+    echo "|-- [DEBUG] Parsing secrets.json"
+    ${SCRIPTDIR}/eck_secrets_1.sh ${WORKDIR}/${namespace}/secrets.json > ${WORKDIR}/${namespace}/eck_secrets.txt
+  fi
+
   # serviceaccount.json
   # v5
   if [ -e ${WORKDIR}/${namespace}/serviceaccount.json ] && [ $(du ${WORKDIR}/${namespace}/serviceaccount.json | cut -f1) -gt 9 ]; then

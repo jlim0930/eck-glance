@@ -59,7 +59,7 @@ do
 
   # apiversion
   value=$(jq -r '.Items['${i}'] | select(.metadata.ownerReferences != null) |.metadata.ownerReferences[] | select(.controller==true) | ((.apiVersion) // "-")' ${1})
-  printf "%-20s %s\\n" "Owner:" "${value}"
+  printf "%-20s %s\\n" "apiVersion:" "${value}"
 
   # owner
   value=$(jq -r '.Items['${i}'] | select(.metadata.ownerReferences != null) |.metadata.ownerReferences[] | select(.controller==true) | ((.kind + "/" + .name) // "-")' ${1})
@@ -67,11 +67,11 @@ do
 
   # labels
   printf "%-20s \n" "Lables:"
-  jq -r '.Items['${i}'].metadata.labels | (to_entries[] | "\(.key) : \(.value)"), "" | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
+  jq -r '.Items['${i}'].metadata.labels | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
 
   # annotations
   printf "%-20s \n" "Annotations:"
-  jq -r '.Items['${i}'].metadata.annotations | (to_entries[] | "\(.key) : \(.value)"), "" | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
+  jq -r '.Items['${i}'].metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
   
   echo ""
   # events
