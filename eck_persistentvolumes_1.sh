@@ -87,17 +87,20 @@ do
   printf "%-20s \n" "nodeAffinity:"
   jq -r '.items['${i}'].spec.nodeAffinity.required.nodeSelectorTerms[].matchExpressions[] | (.key + " " + .operator + " " + .values[] // "-")' ${1} 2>/dev/null | sed "s/^/                     /"
   
-  # source -  need work
+  # source
   printf "%-20s \n" "Source:"
-  # type=`jq -r '.items['${i}']' ${1} | jq -r ' paths(scalars) as $p | $p + [getpath($p)] | join(",")' | grep fsType | cut -d"," -f2`
-  type=$(jq -r '.items['${i}'].spec | with_entries( select(.key|contains("isk"))) | to_entries[] | "\(.key)"'  ${1} 2>/dev/null)
-  printf "%-20s %s\\n" "    Type:" "${type}"
-  value=$(jq -r '.items['${i}'] | (.spec.'${type}'.pdName // "-")' ${1} 2>/dev/null)
-  printf "%-20s %s\\n" "    PDName:" "${value}" 
-  value=$(jq -r '.items['${i}'] | (.spec.'${type}'.fsType // "-")' ${1} 2>/dev/null)
-  printf "%-20s %s\\n" "    FSType:" "${value}" 
-  value=$(jq -r '.items['${i}'] | (.spec.'${type}'.readOnly|tostring // "-")' ${1} 2>/dev/null)
-  printf "%-20s %s\\n" "    ReadOnly:" "${value}" 
+  # FIX - need better formatting - hard since the key can be anything with "isk"
+  jq -r '.items[0].spec | with_entries( select(.key|contains("isk")))| keys[] as $k | "\($k)",.[$k]' ${1} 2>/dev/null | sed "s/^/    /"
+
+  # OLD
+  #  type=$(jq -r '.items['${i}'].spec | with_entries( select(.key|contains("isk"))) | to_entries[] | "\(.key)"'  ${1} 2>/dev/null)
+  #  printf "%-20s %s\\n" "    Type:" "${type}"
+  #  value=$(jq -r '.items['${i}'] | (.spec.'${type}'.pdName // "-")' ${1} 2>/dev/null)
+  #  printf "%-20s %s\\n" "    PDName:" "${value}" 
+  #  value=$(jq -r '.items['${i}'] | (.spec.'${type}'.fsType // "-")' ${1} 2>/dev/null)
+  #  printf "%-20s %s\\n" "    FSType:" "${value}" 
+  #  value=$(jq -r '.items['${i}'] | (.spec.'${type}'.readOnly|tostring // "-")' ${1} 2>/dev/null)
+  #  printf "%-20s %s\\n" "    ReadOnly:" "${value}" 
 
   echo ""
   echo ""

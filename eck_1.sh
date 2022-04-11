@@ -253,7 +253,7 @@ do
 ##   # networkpolicies.json
 ##   # FIX not done since no sample
 ##   if [ -e ${WORKDIR}/${namespace}/networkpolicies.json ] && [ $(du ${WORKDIR}/${namespace}/networkpolicies.json | cut -f1) -gt 9 ]; then
-##     echo "|-- [DEBUG] Parsing networkpolicies.json"
+##     echo "|-- [DEBUG] Parsinfg networkpolicies.json"
 ## #    ${SCRIPTDIR}/eck_networkpolicies_1.sh ${WORKDIR}/${namespace}/networkpolicies.json > ${WORKDIR}/${namespace}/networkpolicies.txt
 ##   fi
 ##   
@@ -264,13 +264,13 @@ do
 ##     ${SCRIPTDIR}/eck_persistentvolumeclaims_1.sh ${WORKDIR}/${namespace}/persistentvolumeclaims.json > ${WORKDIR}/${namespace}/eck_persistentvolumeclaims.txt
 ##   fi
 ## 
-##   # persistentvolumes.json
-##   # v5
-##   if [ -e ${WORKDIR}/${namespace}/persistentvolumes.json ] && [ $(du ${WORKDIR}/${namespace}/persistentvolumes.json | cut -f1) -gt 9 ]; then
-##     echo "|-- [DEBUG] Parsing PersistentVolumes"
-##     ${SCRIPTDIR}/eck_persistentvolumes_1.sh ${WORKDIR}/${namespace}/persistentvolumes.json > ${WORKDIR}/${namespace}/eck_persistentvolumes.txt
-##   fi
-## 
+  # persistentvolumes.json
+  # v5
+  if [ -e ${WORKDIR}/${namespace}/persistentvolumes.json ] && [ $(du ${WORKDIR}/${namespace}/persistentvolumes.json | cut -f1) -gt 9 ]; then
+    echo "|-- [DEBUG] Parsing persistentvolumes.json"
+    ${SCRIPTDIR}/eck_persistentvolumes_1.sh ${WORKDIR}/${namespace}/persistentvolumes.json > ${WORKDIR}/${namespace}/eck_persistentvolumes.txt
+  fi
+
   # secrets.json
   # v5
   if [ -e ${WORKDIR}/${namespace}/secrets.json ] && [ $(du ${WORKDIR}/${namespace}/secrets.json | cut -f1) -gt 9 ]; then
