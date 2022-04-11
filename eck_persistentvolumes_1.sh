@@ -24,9 +24,7 @@ jq -r '
     "STORAGECLASS": (.spec.storageClassName // "-"),
     "VOLUME MODE": (.spec.volumeMode // "-"),
     "CREATION TIME": (.metadata.creationTimestamp // "-")
-  }
-]
-| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  | column -ts $'\t'
 echo ""
 
 # FIX find a way to do better for disk detection and make a table

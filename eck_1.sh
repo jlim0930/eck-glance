@@ -257,13 +257,13 @@ do
 ## #    ${SCRIPTDIR}/eck_networkpolicies_1.sh ${WORKDIR}/${namespace}/networkpolicies.json > ${WORKDIR}/${namespace}/networkpolicies.txt
 ##   fi
 ##   
-##   # persistentvolumeclaims.json
-##   # v5
-##   if [ -e ${WORKDIR}/${namespace}/persistentvolumeclaims.json ] && [ $(du ${WORKDIR}/${namespace}/persistentvolumeclaims.json | cut -f1) -gt 9 ]; then
-##     echo "|-- [DEBUG] Parsing PersistentVolumeClaims"
-##     ${SCRIPTDIR}/eck_persistentvolumeclaims_1.sh ${WORKDIR}/${namespace}/persistentvolumeclaims.json > ${WORKDIR}/${namespace}/eck_persistentvolumeclaims.txt
-##   fi
-## 
+  # persistentvolumeclaims.json
+  # v5
+  if [ -e ${WORKDIR}/${namespace}/persistentvolumeclaims.json ] && [ $(du ${WORKDIR}/${namespace}/persistentvolumeclaims.json | cut -f1) -gt 9 ]; then
+    echo "|-- [DEBUG] Parsing persistentvolumeclaims.json"
+    ${SCRIPTDIR}/eck_persistentvolumeclaims_1.sh ${WORKDIR}/${namespace}/persistentvolumeclaims.json > ${WORKDIR}/${namespace}/eck_persistentvolumeclaims.txt
+  fi
+
   # persistentvolumes.json
   # v5
   if [ -e ${WORKDIR}/${namespace}/persistentvolumes.json ] && [ $(du ${WORKDIR}/${namespace}/persistentvolumes.json | cut -f1) -gt 9 ]; then

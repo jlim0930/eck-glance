@@ -15,17 +15,15 @@ jq -r '
 [.items
 | sort_by(.metdata.name)[]
 | {
-    "Name": (.metadata.name // "-"),
-    "Status": (.status.phase // "-"),
-    "Volume": (.spec.volumeName // "-"),
-    "Capacity": (.spec.resources.requests.storage // "-"),
-    "Access Modes": (.spec.accessModes[0] // "-"),
-    "StorageClass": (.spec.storageClassName // "-"),
-    "VolumeMode": (.spec.volumeMode // "-"),
-    "CreationTimestamp": (.metadata.creationTimestamp // "-")
-  }
-]
-| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  | column -ts $'\t'
+    "NAME": (.metadata.name // "-"),
+    "STATUS": (.status.phase // "-"),
+    "VOLUME": (.spec.volumeName // "-"),
+    "CAPACITY": (.spec.resources.requests.storage // "-"),
+    "ACCESS MODES": (.spec.accessModes[0] // "-"),
+    "STORAGECLASS": (.spec.storageClassName // "-"),
+    "VOLUME MODE": (.spec.volumeMode // "-"),
+    "CREATION TIME": (.metadata.creationTimestamp // "-")
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  | column -ts $'\t'
 echo ""
 echo ""
 
@@ -39,12 +37,10 @@ jq -r '
 [.items
 | sort_by(.metdata.name)[]
 | {
-    "Name": (.metadata.name // "-"),
+    "NAME": (.metadata.name // "-"),
     "APIVERSION": (select(.metadata.ownerReferences != null) |.metadata.ownerReferences[] | select(.name !=null) | ((.apiVersion) // "-")),
     "OWNER": (select(.metadata.ownerReferences != null) |.metadata.ownerReferences[] | select(.name !=null) | ((.name) // "-"))
-  }
-]
-| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  | column -ts $'\t'
 echo ""
 echo ""
 
