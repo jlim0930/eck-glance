@@ -105,12 +105,12 @@ echo "==========================================================================
 echo "WORKER NODE Container Image List - elastic only.  Full list at bottom"
 echo "========================================================================================="
 echo ""
-# FIX - we can iterate with jq - something like but did not work - needs eyes
-#jq -r '
-#(.items[] | .metadata.name as $nodename
-#| (.spec.images[]
-#| select(.names[] | contains("elastic"))
-#| [ $nodename, (.names[]|last // "-"), (.sizeBytes // "-")]))' nodes.json
+# FIX - we can iterate with jq - something like but did not work - needs eyes - also same on the end without the filter
+# FIX - need to do .names[] --> (.names[]|last) but its not working
+#jq -r '["NODE","IMAGE","SIZE"],
+#(.items[]| .metadata.name as $nodename
+#| (.status.images[] | select(.names[] | contains("elastic"))
+#| [ $nodename, .names[], (.sizeBytes // "-")]))|join(",")' nodes.json | column -t -s ","
 
 for ((i=0; i<$count; i++))
 do
