@@ -41,121 +41,122 @@ do
     touch ${WORKDIR}/${namespace}/eck_events.txt
   fi
 
-##   # elasticsearch.json
-##   if [ -e ${WORKDIR}/${namespace}/elasticsearch.json ] && [ $(du ${WORKDIR}/${namespace}/elasticsearch.json | cut -f1) -gt 9 ]; then
-##     echo "|-- [DEBUG] Parsing Elasticsearch"
-##     ${SCRIPTDIR}/eck_elasticsearch_1.sh ${WORKDIR}/${namespace}/elasticsearch.json > ${WORKDIR}/${namespace}/eck_elasticsearchs.txt
-## 
-##     eslist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/elasticsearch.json`
-##     for es in ${eslist}
-##     do
-##       echo "  |---- [DEBUG] Parsing Elasticsearch for ${es}"
-##       export es
-##       ${SCRIPTDIR}/eck_elasticsearch_2.sh ${WORKDIR}/${namespace}/elasticsearch.json > ${WORKDIR}/${namespace}/eck_elasticsearch-${es}.txt    
-##       unset es
-##     done
-##   fi
-## 
-##   # kibana.json
-##   if [ -e ${WORKDIR}/${namespace}/kibana.json ] && [ $(du ${WORKDIR}/${namespace}/kibana.json | cut -f1) -gt 9 ]; then
-##     echo "|-- [DEBUG] Parsing Kibana"
-##     ${SCRIPTDIR}/eck_kibana_1.sh ${WORKDIR}/${namespace}/kibana.json > ${WORKDIR}/${namespace}/eck_kibanas.txt
-## 
-##     kibanalist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/kibana.json`
-##     for kibana in ${kibanalist}
-##     do
-##       echo "  |---- [DEBUG] Parsing Kibanas for ${kibana}"
-##       export kibana
-##       ${SCRIPTDIR}/eck_kibana_2.sh ${WORKDIR}/${namespace}/kibana.json > ${WORKDIR}/${namespace}/eck_kibana-${kibana}.txt    
-##       unset kibana
-##     done
-##   fi
-## 
-##   # beat.json
-##   if [ -e ${WORKDIR}/${namespace}/beat.json ] && [ $(du ${WORKDIR}/${namespace}/beat.json | cut -f1) -gt 9 ]; then
-##     echo "|-- [DEBUG] Parsing Beats"
-##     ${SCRIPTDIR}/eck_beat_1.sh ${WORKDIR}/${namespace}/beat.json > ${WORKDIR}/${namespace}/eck_beats.txt
-## 
-##     beatlist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/beat.json`
-##     for beat in ${beatlist}
-##     do
-##       echo "  |---- [DEBUG] Parsing Beat for ${beat}"
-##       export beat
-##       ${SCRIPTDIR}/eck_beat_2.sh ${WORKDIR}/${namespace}/beat.json > ${WORKDIR}/${namespace}/eck_beat-${beat}.txt    
-##       unset beat
-##     done
-##   fi
-## 
-## # agent.json
-## # FIX - didnt have an example so didnt work on it
-##   if [ -e ${WORKDIR}/${namespace}/agent.json ] && [ $(du ${WORKDIR}/${namespace}/agent.json | cut -f1) -gt 9 ]; then
-##     echo "|-- [DEBUG] Parsing Agents"
-##     ${SCRIPTDIR}/eck_agent_1.sh ${WORKDIR}/${namespace}/agent.json > ${WORKDIR}/${namespace}/eck_agents.txt
-##   fi
-## 
-##   # apmserver.json
-##   if [ -e ${WORKDIR}/${namespace}/apmserver.json ] && [ $(du ${WORKDIR}/${namespace}/apmserver.json | cut -f1) -gt 9 ]; then
-##     echo "|-- [DEBUG] Parsing APMServers"
-##     ${SCRIPTDIR}/eck_apmserver_1.sh ${WORKDIR}/${namespace}/apmserver.json > ${WORKDIR}/${namespace}/eck_apmservers.txt
-## 
-##     apmlist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/apmserver.json`
-##     for apm in ${apmlist}
-##     do
-##       echo "  |---- [DEBUG] Parsing APMServer for ${apm}"
-##       export apm
-##       ${SCRIPTDIR}/eck_apmserver_2.sh ${WORKDIR}/${namespace}/apmserver.json > ${WORKDIR}/${namespace}/eck_apmserver-${apm}.txt    
-##       unset apm
-##     done
-##   fi
-## 
-##   # enterprisesearch.json
-##   if [ -e ${WORKDIR}/${namespace}/enterprisesearch.json ] && [ $(du ${WORKDIR}/${namespace}/enterprisesearch.json | cut -f1) -gt 9 ]; then
-##     echo "|-- [DEBUG] Parsing Enterprisesearchs"
-##     ${SCRIPTDIR}/eck_enterprisesearch_1.sh ${WORKDIR}/${namespace}/enterprisesearch.json > ${WORKDIR}/${namespace}/eck_enterprisesearchs.txt
-## 
-##     entsearchlist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/enterprisesearch.json`
-##     for entsearch in ${entsearchlist}
-##     do
-##       echo "  |---- [DEBUG] Parsing EnterpriseSearch for ${entsearch}"
-##       export entsearch
-##       ${SCRIPTDIR}/eck_enterprisesearch_2.sh ${WORKDIR}/${namespace}/enterprisesearch.json > ${WORKDIR}/${namespace}/eck_enterprisesearch-${entsearch}.txt    
-##       unset entsearch
-##     done
-##   fi
-## 
-##   # elasticmapsserver.json
-##   if [ -e ${WORKDIR}/${namespace}/elasticmapsserver.json ] && [ $(du ${WORKDIR}/${namespace}/elasticmapsserver.json | cut -f1) -gt 9 ]; then
-##     echo "|-- [DEBUG] Parsing ElasticMapsServer"
-##     ${SCRIPTDIR}/eck_elasticmapsserver_1.sh ${WORKDIR}/${namespace}/elasticmapsserver.json > ${WORKDIR}/${namespace}/elasticmapsservers.txt
-## 
-##     esmaplist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/elasticmapsserver.json`
-##     for esmap in ${esmaplist}
-##     do
-##       echo "  |---- [DEBUG] Parsing ElasticMapServer for ${elasticmapsserver}"
-##       export esmap
-##       ${SCRIPTDIR}/eck_elasticmapsserver_2.sh ${WORKDIR}/${namespace}/elasticmapsserver.json > ${WORKDIR}/${namespace}/eck_elasticmapsserver-${esmap}.txt    
-##       unset esmap
-##     done
-##   fi
-## 
-## # ------
-## 
-##   # collect daemonsets.json
-##   # v4
-##   if [ -e ${WORKDIR}/${namespace}/daemonsets.json ] && [ $(du ${WORKDIR}/${namespace}/daemonsets.json | cut -f1) -gt 9 ]; then
-##     echo "|-- [DEBUG] Parsing DaemonSets"
-##     ${SCRIPTDIR}/eck_daemonsets_1.sh ${WORKDIR}/${namespace}/daemonsets.json > ${WORKDIR}/${namespace}/eck_daemonsets.txt
-##     
-##     dslist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/daemonsets.json`
-##     for ds in ${dslist}
-##     do
-##       echo "  |---- [DEBUG] Parsing DaemonSet for ${ds}"
-##       export ds
-##       ${SCRIPTDIR}/eck_daemonsets_2.sh ${WORKDIR}/${namespace}/daemonsets.json > ${WORKDIR}/${namespace}/eck_daemonset-${ds}.txt    
-##       unset ds
-##     done
-##   fi
-## 
+  # elasticsearch.json
+  if [ -e ${WORKDIR}/${namespace}/elasticsearch.json ] && [ $(du ${WORKDIR}/${namespace}/elasticsearch.json | cut -f1) -gt 9 ]; then
+    echo "|-- [DEBUG] Parsing elasticsearch.json"
+    ${SCRIPTDIR}/eck_elasticsearch_1.sh ${WORKDIR}/${namespace}/elasticsearch.json > ${WORKDIR}/${namespace}/eck_elasticsearchs.txt
+
+    eslist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/elasticsearch.json`
+    for es in ${eslist}
+    do
+      echo "  |---- [DEBUG] Parsing elasticsearch.json for ${es}"
+      export es
+      ${SCRIPTDIR}/eck_elasticsearch_2.sh ${WORKDIR}/${namespace}/elasticsearch.json > ${WORKDIR}/${namespace}/eck_elasticsearch-${es}.txt    
+      unset es
+    done
+  fi
+
+  # kibana.json
+  if [ -e ${WORKDIR}/${namespace}/kibana.json ] && [ $(du ${WORKDIR}/${namespace}/kibana.json | cut -f1) -gt 9 ]; then
+    echo "|-- [DEBUG] Parsing kibana.json"
+    ${SCRIPTDIR}/eck_kibana_1.sh ${WORKDIR}/${namespace}/kibana.json > ${WORKDIR}/${namespace}/eck_kibanas.txt
+
+    kibanalist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/kibana.json`
+    for kibana in ${kibanalist}
+    do
+      echo "  |---- [DEBUG] Parsing kibana.json for ${kibana}"
+      export kibana
+      ${SCRIPTDIR}/eck_kibana_2.sh ${WORKDIR}/${namespace}/kibana.json > ${WORKDIR}/${namespace}/eck_kibana-${kibana}.txt    
+      unset kibana
+    done
+  fi
+
+  # beat.json
+  if [ -e ${WORKDIR}/${namespace}/beat.json ] && [ $(du ${WORKDIR}/${namespace}/beat.json | cut -f1) -gt 9 ]; then
+    echo "|-- [DEBUG] Parsing beat.json"
+    ${SCRIPTDIR}/eck_beat_1.sh ${WORKDIR}/${namespace}/beat.json > ${WORKDIR}/${namespace}/eck_beats.txt
+
+    beatlist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/beat.json`
+    for beat in ${beatlist}
+    do
+      echo "  |---- [DEBUG] Parsing beat.json for ${beat}"
+      export beat
+      ${SCRIPTDIR}/eck_beat_2.sh ${WORKDIR}/${namespace}/beat.json > ${WORKDIR}/${namespace}/eck_beat-${beat}.txt    
+      unset beat
+    done
+  fi
+
+# agent.json
+# FIX - didnt have an example so didnt work on it
+  if [ -e ${WORKDIR}/${namespace}/agent.json ] && [ $(du ${WORKDIR}/${namespace}/agent.json | cut -f1) -gt 9 ]; then
+    echo "|-- [DEBUG] Parsing agent.json"
+    ${SCRIPTDIR}/eck_agent_1.sh ${WORKDIR}/${namespace}/agent.json > ${WORKDIR}/${namespace}/eck_agents.txt
+  fi
+
+  # apmserver.json
+  if [ -e ${WORKDIR}/${namespace}/apmserver.json ] && [ $(du ${WORKDIR}/${namespace}/apmserver.json | cut -f1) -gt 9 ]; then
+    echo "|-- [DEBUG] Parsing apmserver.json"
+    ${SCRIPTDIR}/eck_apmserver_1.sh ${WORKDIR}/${namespace}/apmserver.json > ${WORKDIR}/${namespace}/eck_apmservers.txt
+
+    apmlist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/apmserver.json`
+    for apm in ${apmlist}
+    do
+      echo "  |---- [DEBUG] Parsing apmserver.json for ${apm}"
+      export apm
+      ${SCRIPTDIR}/eck_apmserver_2.sh ${WORKDIR}/${namespace}/apmserver.json > ${WORKDIR}/${namespace}/eck_apmserver-${apm}.txt    
+      unset apm
+    done
+  fi
+
+  # enterprisesearch.json
+  if [ -e ${WORKDIR}/${namespace}/enterprisesearch.json ] && [ $(du ${WORKDIR}/${namespace}/enterprisesearch.json | cut -f1) -gt 9 ]; then
+    echo "|-- [DEBUG] Parsing enterprisesearch.json"
+    ${SCRIPTDIR}/eck_enterprisesearch_1.sh ${WORKDIR}/${namespace}/enterprisesearch.json > ${WORKDIR}/${namespace}/eck_enterprisesearchs.txt
+
+    entsearchlist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/enterprisesearch.json`
+    for entsearch in ${entsearchlist}
+    do
+      echo "  |---- [DEBUG] Parsing enterprisesearch.json for ${entsearch}"
+      export entsearch
+      ${SCRIPTDIR}/eck_enterprisesearch_2.sh ${WORKDIR}/${namespace}/enterprisesearch.json > ${WORKDIR}/${namespace}/eck_enterprisesearch-${entsearch}.txt    
+      unset entsearch
+    done
+  fi
+
+  # elasticmapsserver.json
+  if [ -e ${WORKDIR}/${namespace}/elasticmapsserver.json ] && [ $(du ${WORKDIR}/${namespace}/elasticmapsserver.json | cut -f1) -gt 9 ]; then
+    echo "|-- [DEBUG] Parsing elasticmapsserver.json"
+    ${SCRIPTDIR}/eck_elasticmapsserver_1.sh ${WORKDIR}/${namespace}/elasticmapsserver.json > ${WORKDIR}/${namespace}/elasticmapsservers.txt
+
+    esmaplist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/elasticmapsserver.json`
+    for esmap in ${esmaplist}
+    do
+      echo "  |---- [DEBUG] Parsing elasticmapsserver.json for ${elasticmapsserver}"
+      export esmap
+      ${SCRIPTDIR}/eck_elasticmapsserver_2.sh ${WORKDIR}/${namespace}/elasticmapsserver.json > ${WORKDIR}/${namespace}/eck_elasticmapsserver-${esmap}.txt    
+      unset esmap
+    done
+  fi
+
+# ------
+
+  # collect daemonsets.json
+  # v5
+  # FIX - didnt get to test much due to no data
+  if [ -e ${WORKDIR}/${namespace}/daemonsets.json ] && [ $(du ${WORKDIR}/${namespace}/daemonsets.json | cut -f1) -gt 9 ]; then
+    echo "|-- [DEBUG] Parsing daemonsets.json"
+    ${SCRIPTDIR}/eck_daemonsets_1.sh ${WORKDIR}/${namespace}/daemonsets.json > ${WORKDIR}/${namespace}/eck_daemonsets.txt
+    
+    dslist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/daemonsets.json`
+    for ds in ${dslist}
+    do
+      echo "  |---- [DEBUG] Parsing daemonsets.json for ${ds}"
+      export ds
+      ${SCRIPTDIR}/eck_daemonsets_2.sh ${WORKDIR}/${namespace}/daemonsets.json > ${WORKDIR}/${namespace}/eck_daemonset-${ds}.txt    
+      unset ds
+    done
+  fi
+
   # collect statefulsets.json
   # v5
   if [ -e ${WORKDIR}/${namespace}/statefulsets.json ] && [ $(du ${WORKDIR}/${namespace}/statefulsets.json | cut -f1) -gt 9 ]; then

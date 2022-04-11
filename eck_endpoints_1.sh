@@ -23,7 +23,7 @@ jq -r '
     "TARGET KIND": (([(.subsets[].addresses[].targetRef.kind)]|join(",")) // "-"),
     "TARGET NAME": (([(.subsets[].addresses[].targetRef.name)]|join(",")) // "-"),
     "Creation Time": (.metadata.creationTimestamp // "-") }
-]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
+]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t'
 echo ""
 
 echo "== Not Ready --------------------------------------------------------------------------"
@@ -39,7 +39,7 @@ jq -r '
     "TARGET KIND": (([(.subsets[].notReadyAddresses[].targetRef.kind)]|join(",")) // "-"),
     "TARGET NAME": (([(.subsets[].notReadyAddresses[].targetRef.name)]|join(",")) // "-"),
     "Creation Time": (.metadata.creationTimestamp // "-") }
-]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
+]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t'
 echo ""
 
 echo ""
