@@ -34,12 +34,12 @@ value=$(jq -r '.items[] | select(.metadata.name=="'${rs}'") | (.metadata.ownerRe
 printf "%-20s %s\\n" "Controlled By:" "${value}"
 
 # Replicas
-value=$(jq -r '.items[] | select(.metadata.name=="'${rs}'") | ((.status.readyReplicas|tostring) + " current | " + (.status.replicas|tostring) + " desired" // "-")' ${1} 2>/dev/null)
+value=$(jq -r '.items[] | select(.metadata.name=="'${rs}'") | ((.status.readyReplicas // "-") + " current | " + (.status.replicas|tostring) + " desired" // "-")' ${1} 2>/dev/null)
 printf "%-20s %s\\n" "Replicas:" "${value}"
 echo ""
 
 # apiVersion
-value=$(jq -r '.items[] | select(.metadata.name=="'${rs}'") | (.metadata.ownerReferences[] | select(.controller==true) |.apiVersion|tostring // "-")' ${1} 2>/dev/null)
+value=$(jq -r '.items[] | select(.metadata.name=="'${rs}'") | (.metadata.ownerReferences[] | select(.controller==true) |.apiVersion/ // "-")' ${1} 2>/dev/null)
 printf "%-20s %s\\n" "apiVersion:" "${value}"
 
 # owner Reference

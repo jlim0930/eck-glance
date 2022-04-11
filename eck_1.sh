@@ -172,22 +172,22 @@ do
 ##     done
 ##   fi
 ## 
-##   # collect replicasets.json
-##   # v4
-##   if [ -e ${WORKDIR}/${namespace}/replicasets.json ] && [ $(du ${WORKDIR}/${namespace}/replicasets.json | cut -f1) -gt 9 ]; then
-##     echo "|-- [DEBUG] Parsing ReplicaSets"
-##     ${SCRIPTDIR}/eck_replicasets_1.sh ${WORKDIR}/${namespace}/replicasets.json > ${WORKDIR}/${namespace}/eck_replicasets.txt
-##     
-##     rslist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/replicasets.json`
-##     for rs in ${rslist}
-##     do
-##       echo "  |---- [DEBUG] Parsing ReplicaSet for ${rs}"
-##       export rs
-##       ${SCRIPTDIR}/eck_replicasets_2.sh ${WORKDIR}/${namespace}/replicasets.json > ${WORKDIR}/${namespace}/eck_replicaset-${rs}.txt    
-##       unset rs
-##     done
-##   fi
-## 
+  # collect replicasets.json
+  # v4
+  if [ -e ${WORKDIR}/${namespace}/replicasets.json ] && [ $(du ${WORKDIR}/${namespace}/replicasets.json | cut -f1) -gt 9 ]; then
+    echo "|-- [DEBUG] Parsing replicasets.json"
+    ${SCRIPTDIR}/eck_replicasets_1.sh ${WORKDIR}/${namespace}/replicasets.json > ${WORKDIR}/${namespace}/eck_replicasets.txt
+    
+    rslist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/replicasets.json`
+    for rs in ${rslist}
+    do
+      echo "  |---- [DEBUG] Parsing replicasets.json for ${rs}"
+      export rs
+      ${SCRIPTDIR}/eck_replicasets_2.sh ${WORKDIR}/${namespace}/replicasets.json > ${WORKDIR}/${namespace}/eck_replicaset-${rs}.txt    
+      unset rs
+    done
+  fi
+
   # collect pods.json
   # v5
   if [ -e ${WORKDIR}/${namespace}/pods.json ] && [ $(du ${WORKDIR}/${namespace}/pods.json | cut -f1) -gt 9 ]; then

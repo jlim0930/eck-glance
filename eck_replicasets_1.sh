@@ -15,14 +15,12 @@ jq -r '
 [.items
 | sort_by(.metdata.name)[]
 | {
-    "Name": (.metadata.name // "-"),
-    "Desired": (.status.replicas|tostring // "-"),
-    "Current": (.status.availableReplicas|tostring // "-"),
-    "Ready": (.status.readyReplicas|tostring // "-"),
-    "CreationTimestamp": (.metadata.creationTimestamp // "-")
-  }
-]
-| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t'
+    "NAME": (.metadata.name // "-"),
+    "DESIRED": (.status.replicas // "-"),
+    "CURRENT": (.status.availableReplicas // "-"),
+    "READY": (.status.readyReplicas // "-"),
+    "CREATION TIME": (.metadata.creationTimestamp // "-")
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t'
 echo ""
 
 echo "========================================================================================="
@@ -33,11 +31,11 @@ jq -r '
 [.items
 | sort_by(.metdata.name)[]
 | {
-    "Name": (.metadata.name // "-"),
-    "apiVersion": (.metadata.ownerReferences[] | select(.controller==true) |.apiVersion // "-"),
-    "Owner": (.metadata.ownerReferences[] | select(.controller==true) |.kind + "/" + .name // "-"),
-    "Containers": ([.spec.template.spec.containers[].name]|join(",") // "-"),
-    "Images": ([.spec.template.spec.containers[].image]|join(",") // "-")
+    "NAME": (.metadata.name // "-"),
+    "APIVERSION": (.metadata.ownerReferences[] | select(.controller==true) |.apiVersion // "-"),
+    "OWNER": (.metadata.ownerReferences[] | select(.controller==true) |.kind + "/" + .name // "-"),
+    "CONTAINERS": ([.spec.template.spec.containers[].name]|join(",") // "-"),
+    "IMAGES": ([.spec.template.spec.containers[].image]|join(",") // "-")
   }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t'
 echo ""
 
@@ -51,7 +49,7 @@ jq -r '
 | sort_by(.metdata.name)[]
 | {
     "Name": (.metadata.name // "-"),
-    "Replicas": (.spec.replicas|tostring // "-"),
+    "Replicas": (.spec.replicas // "-"),
     "Selector": ([(.spec.selector.matchLabels)| (to_entries[] | "\(.key)=\(.value)")] | join(",") // "-")
   }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t'
 echo ""
