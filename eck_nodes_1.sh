@@ -30,73 +30,100 @@ jq -r '
     "KERNEL": (.status.nodeInfo.kernelVersion // "-"),
     "kubelet Version": (.status.nodeInfo.kubeletVersion // "-"),
     "Runtime Version": (.status.nodeInfo.containerRuntimeVersion // "-")
-  }
-]
-| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
 echo ""
 
 echo "========================================================================================="
 echo "WORKER NODE Health Summary"
 echo "========================================================================================="
 echo ""
-jq -r '
-[.items[]
-| {
-    "HOST": (.metadata.name // "-"),
-    "Ready": (.status.conditions[] | select(.type=="Ready") | .status // "-"),
-    "NetUnavail": (.status.conditions[] | select(.type=="NetworkUnavailable") | .status // "-"),
-    "Kernel Deadlock": (.status.conditions[] | select(.type=="KernelDeadlock") | .status // "-"),
-    "Freq ContainerdRestart": (.status.conditions[] | select(.type=="FrequentContainerdRestart") | .status),
-    "Freq DockerRestart": (.status.conditions[] | select(.type=="FrequentDockerRestart") | .status // "-"),
-    "Freq KubeletRestart": (.status.conditions[] | select(.type=="FrequentKubeletRestart") | .status // "-"),
-    "Freq UnregNetDevice": (.status.conditions[] | select(.type=="FrequentUnregisterNetDevice") | .status // "-"),
-    "Corrupt DockerOverlay2": (.status.conditions[] | select(.type=="CorruptDockerOverlay2") | .status // "-"),
-    "Readonly Filesystem": (.status.conditions[] | select(.type=="ReadonlyFilesystem") | .status // "-")
-  }
-]
-| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
-echo ""
-
-echo "========================================================================================="
-echo "WORKER NODE Metrics Summary"
-echo "========================================================================================="
+echo "== PRESSURE -----------------------------------------------------------------------------"
 echo ""
 jq -r '
 [.items[]
 | {
     "HOST": (.metadata.name // "-"),
-    "CPU allocated": (.status.allocatable.cpu // "-"),
-    "CPU limit": (.status.capacity.cpu // "-"),
-    "PID Pressure": (.status.conditions[] | select(.type=="PIDPressure") | .status // "-"),
-    "MEM allocated": (.status.allocatable.memory // "-"),
-    "MEM limit": (.status.capacity.memory // "-"),
-    "MEM Pressure": (.status.conditions[] | select(.type=="MemoryPressure") | .status // "-"),
-    "DISK allocated": (.status.allocatable."ephemeral-storage" // "-"),
-    "DISK limit": (.status.capacity."ephemeral-storage" // "-"),
-    "DISK Pressure": (.status.conditions[] | select(.type=="DiskPressure") | .status // "-")
-  }
-]
-| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
+    "CPU ALLOCATED": (.status.allocatable.cpu // "-"),
+    "CPU LIMIT": (.status.capacity.cpu // "-"),
+    "PID PRESSURE": ((.status.conditions[] | select(.type=="PIDPressure") | .status) // "-"),
+    "MEM ALLOCATED": (.status.allocatable.memory // "-"),
+    "MEM LIMIT": (.status.capacity.memory // "-"),
+    "MEM PRESSURE": ((.status.conditions[] | select(.type=="MemoryPressure") | .status) // "-"),
+    "DISK ALLOCATED": (.status.allocatable."ephemeral-storage" // "-"),
+    "DISK LIMIT": (.status.capacity."ephemeral-storage" // "-"),
+    "DISK PRESSURE": ((.status.conditions[] | select(.type=="DiskPressure") | .status) // "-")
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
+echo ""
+echo "== SCHEDULED ----------------------------------------------------------------------------"
+echo ""
+jq -r '
+[.items[]
+| {
+    "HOST": (.metadata.name // "-"),
+    "REBOOT": ((.status.conditions[] | select(.type=="RebootScheduled") | .status) // "-"),
+    "TERMINATE": ((.status.conditions[] | select(.type=="TerminateScheduled") | .status) // "-"),
+    "PREEMPT": ((.status.conditions[] | select(.type=="PreemptScheduled") | .status) // "-"),
+    "REDEPLOY": ((.status.conditions[] | select(.type=="RedeployScheduled") | .status) // "-"),
+    "FREEZE": ((.status.conditions[] | select(.type=="FreezeScheduled") | .status) // "-")
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
+echo ""
+echo "== RESTART ------------------------------------------------------------------------------"
+echo ""
+jq -r '
+[.items[]
+| {
+    "HOST": (.metadata.name // "-"),
+    "FREQ DDOCKER": ((.status.conditions[] | select(.type=="FrequentDockerRestart") | .status) // "-"),
+    "FREQ KUBLET": ((.status.conditions[] | select(.type=="FrequentKubeletRestart") | .status) // "-"),
+    "FREQ CONTAINER": ((.status.conditions[] | select(.type=="FrequentContainerdRestart") | .status) // "-")
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
+echo ""
+echo "== PROBLEM ------------------------------------------------------------------------------"
+echo ""
+jq -r '
+[.items[]
+| {
+    "HOST": (.metadata.name // "-"),
+    "KUBELET": ((.status.conditions[] | select(.type=="KubeletProblem") | .status) // "-"),
+    "CONTAINER RUNTIME": ((.status.conditions[] | select(.type=="ContainerRuntimeProblem") | .status) // "-"),
+    "FS CORRUPTION": ((.status.conditions[] | select(.type=="FilesystemCorruptionProblem") | .status) // "-")
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
+echo ""
+echo "== OTHER --------------------------------------------------------------------------------"
+jq -r '
+[.items[]
+| {
+    "HOST": (.metadata.name // "-"),
+    "RO FILESYSTEM": ((.status.conditions[] | select(.type=="ReadonlyFilesystem") | .status) // "-"),
+    "FREQ UNREG NET DEVICES": ((.status.conditions[] | select(.type=="FrequentUnregisterNetDevice") | .status) // "-"),
+    "KERNEL DEADLOCK": ((.status.conditions[] | select(.type=="KernelDeadlock") | .status) // "-"),
+    "CORRUPT OVERLAY": ((.status.conditions[] | select(.type=="CorruptDockerOverlay2") | .status) // "-"),
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
 echo ""
 
 echo "========================================================================================="
 echo "WORKER NODE Container Image List - elastic only.  Full list at bottom"
 echo "========================================================================================="
 echo ""
+# FIX - we can iterate with jq - something like but did not work - needs eyes
+#jq -r '
+#(.items[] | .metadata.name as $nodename
+#| (.spec.images[]
+#| select(.names[] | contains("elastic"))
+#| [ $nodename, (.names[]|last // "-"), (.sizeBytes // "-")]))' nodes.json
+
 for ((i=0; i<$count; i++))
 do
   host=`jq -r '.items['$i'].metadata.name' ${1}`
   echo "---------- HOST: ${host} -----------------------------------------------------------------"
   jq -r '
   [.items['$i'].status.images[]
-  | select(.names[1] 
+  | select(.names[] 
   | contains("elastic"))
   | {
-      "Image Name": (.names |last // "-"),
-      "Image Size": (.sizeBytes // "-")
-    }
-  ]
-  | (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
+      "IMAGE NAME": (.names |last // "-"),
+      "IMAGE SIZE": (.sizeBytes // "-")
+    }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
   echo ""
 done
 echo ""
@@ -111,18 +138,16 @@ jq -r '
     "HOST": (.metadata.name // "-"),
     "ZONE": (.metadata.labels."topology.kubernetes.io/zone" // "-"),
     "REGION": (.metadata.labels."topology.kubernetes.io/region" // "-"),
-    "INTERNAL IP": (.status.addresses[] | select(.type=="InternalIP") | .address // "-"),
-    "EXTERNAL IP": (.status.addresses[] | select(.type=="ExternalIP") | .address // "-")
-  }
-]
-| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
+    "INTERNAL IP": ((.status.addresses[] | select(.type=="InternalIP") | .address) // "-"),
+    "EXTERNAL IP": ((.status.addresses[] | select(.type=="ExternalIP") | .address) // "-")
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
 echo ""
 
 echo "========================================================================================="
 echo "WORKER NODE Storage Summary - Attached volumes"
 echo "========================================================================================="
 echo ""
-jq -r '["Node","Volumn Name", "Device Path"],
+jq -r '["NODE","VOLUME NAME", "DEVICE PATH"],
 (.items[] 
 | .metadata.name as $nodename
 | (.status.volumesAttached[]
@@ -135,7 +160,7 @@ echo "==========================================================================
 echo "WORKER NODE Storage Summary - Volumes in USE"
 echo "========================================================================================="
 echo ""
-jq -r '["Node", "Volume in Use"],
+jq -r '["NODE", "VOLUME IN USE"],
 (.items[] 
 | .metadata.name as $nodename 
 | .status.volumesInUse[]? 
@@ -150,7 +175,7 @@ for ((i=0; i<$count; i++))
 do
   host=`jq -r '.items['$i'].metadata.name' ${1}`
   echo "---------- HOST: ${host} -----------------------------------------------------------------"
-  jq -r '.items['${i}'] | .metadata.labels | (to_entries[] | "\(.key) : \(.value)"), ""| select(length >0)' ${1}
+  jq -r '.items['${i}'] | .metadata.labels | (to_entries[] | "\(.key)=\(.value)")| select(length >0)' ${1}
   echo ""
 done
 echo ""
@@ -163,7 +188,7 @@ for ((i=0; i<$count; i++))
 do
   host=`jq -r '.items['$i'].metadata.name' ${1}`
   echo "---------- HOST: ${host} -----------------------------------------------------------------"
-  jq -r '.items['${i}'].metadata.annotations | (to_entries[] | "\(.key) : \(.value)"), ""| select(length >0)' ${1}
+  jq -r '.items['${i}'].metadata.annotations | (to_entries[] | "\(.key)=\(.value)")| select(length >0)' ${1}
   echo ""
 done
 echo ""
@@ -178,13 +203,12 @@ do
   echo "---------- HOST: ${host} -----------------------------------------------------------------"
   jq -r '
   [.items['$i'].status.images[]
-  | select(.names[1])
+  | select(.names[])
   | {
-      "Image Name": (.names |last // "-"),
-      "Image Size": (.sizeBytes // "-")
-    }
-  ]
-  | (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
+      "IMAGE NAME": (.names |last // "-"),
+      "IMAGE SIZE": (.sizeBytes // "-")
+    }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
   echo ""
 done
+echo ""
 echo ""

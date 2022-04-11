@@ -11,12 +11,12 @@ export SCRIPTDIR
 # TODO
 # ones with loops move managedFields to individual ones
 
-## # diag for k8s nodes
-## if [ -e ${WORKDIR}/nodes.json ] && [ $(du ${WORKDIR}/${namespace}/nodes.json | cut -f1) -gt 9 ]; then
-##   echo "[DEBUG] Parsing kubernetes worker nodes"
-##   ${SCRIPTDIR}/eck_nodes_1.sh ${WORKDIR}/nodes.json > ${WORKDIR}/eck_nodes.txt
-## fi
-## 
+# diag for k8s nodes
+if [ -e ${WORKDIR}/nodes.json ] && [ $(du ${WORKDIR}/${namespace}/nodes.json | cut -f1) -gt 9 ]; then
+  echo "[DEBUG] Parsing kubernetes worker nodes"
+  ${SCRIPTDIR}/eck_nodes_1.sh ${WORKDIR}/nodes.json > ${WORKDIR}/eck_nodes.txt
+fi
+
 for namespace in `grep Extracting ${WORKDIR}/eck-diagnostics.log | awk '{ print $NF }'`
 do
 ## 
