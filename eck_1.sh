@@ -156,22 +156,22 @@ do
 ##     done
 ##   fi
 ## 
-##   # collect statefulsets.json
-##   # v4
-##   if [ -e ${WORKDIR}/${namespace}/statefulsets.json ] && [ $(du ${WORKDIR}/${namespace}/statefulsets.json | cut -f1) -gt 9 ]; then
-##     echo "|-- [DEBUG] Parsing StatefulSets"
-##     ${SCRIPTDIR}/eck_statefulsets_1.sh ${WORKDIR}/${namespace}/statefulsets.json > ${WORKDIR}/${namespace}/eck_statefulsets.txt
-##     
-##     sslist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/statefulsets.json`
-##     for ss in ${sslist}
-##     do
-##       echo "  |---- [DEBUG] Parsing StatefulSet for ${ss}"
-##       export ss
-##       ${SCRIPTDIR}/eck_statefulsets_2.sh ${WORKDIR}/${namespace}/statefulsets.json > ${WORKDIR}/${namespace}/eck_statefulset-${ss}.txt    
-##       unset ss
-##     done
-##   fi
-## 
+  # collect statefulsets.json
+  # v5
+  if [ -e ${WORKDIR}/${namespace}/statefulsets.json ] && [ $(du ${WORKDIR}/${namespace}/statefulsets.json | cut -f1) -gt 9 ]; then
+    echo "|-- [DEBUG] Parsing statefulsets.json"
+    ${SCRIPTDIR}/eck_statefulsets_1.sh ${WORKDIR}/${namespace}/statefulsets.json > ${WORKDIR}/${namespace}/eck_statefulsets.txt
+    
+    sslist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/statefulsets.json`
+    for ss in ${sslist}
+    do
+      echo "  |---- [DEBUG] Parsing statefulsets.json for ${ss}"
+      export ss
+      ${SCRIPTDIR}/eck_statefulsets_2.sh ${WORKDIR}/${namespace}/statefulsets.json > ${WORKDIR}/${namespace}/eck_statefulset-${ss}.txt    
+      unset ss
+    done
+  fi
+
   # collect replicasets.json
   # v4
   if [ -e ${WORKDIR}/${namespace}/replicasets.json ] && [ $(du ${WORKDIR}/${namespace}/replicasets.json | cut -f1) -gt 9 ]; then

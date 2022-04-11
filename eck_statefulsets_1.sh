@@ -10,6 +10,7 @@ echo "==========================================================================
 echo "StatefulSet Summary - for details pleast look at eck_statefulset-<name>.txt"
 echo "========================================================================================="
 echo ""
+# FIX - null if readyReplicas is not set
 jq -r '
 [.items
 | sort_by(.metdata.name)[]
