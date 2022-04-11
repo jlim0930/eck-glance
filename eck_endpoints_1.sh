@@ -10,18 +10,38 @@ echo "==========================================================================
 echo "Endpoints Summary"
 echo "========================================================================================="
 echo ""
+echo "== READY---------------------------------------------------------------------------------"
 jq -r '
 [.items
 | sort_by(.metdata.name)[]
+| select (.subsets[].addresses != null)
 | {
     "NAME": (.metadata.name // "-"),
     "NAMESPACE": (.metadata.namespace // "-"),
-    "IPs": ([(.subsets[].addresses[].ip)]|join(",") // "-"),
+    "IPs": (([(.subsets[].addresses[].ip)]|join(",")) // "-"),
     "PORTS": ([(.subsets[].ports[].port)]|join(",") // "-"),
+    "TARGET KIND": (([(.subsets[].addresses[].targetRef.kind)]|join(",")) // "-"),
+    "TARGET NAME": (([(.subsets[].addresses[].targetRef.name)]|join(",")) // "-"),
     "Creation Time": (.metadata.creationTimestamp // "-") }
-]
-| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t'
+]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
 echo ""
+
+echo "== Not Ready --------------------------------------------------------------------------"
+jq -r '
+[.items
+| sort_by(.metdata.name)[]
+| select (.subsets[].notReadyAddresses != null)
+| {
+    "NAME": (.metadata.name // "-"),
+    "NAMESPACE": (.metadata.namespace // "-"),
+    "NOT READY IPs": (([(.subsets[].notReadyAddresses[].ip)]|join(",")) // "-"),
+    "PORTS": ([(.subsets[].ports[].port)]|join(",") // "-"),
+    "TARGET KIND": (([(.subsets[].notReadyAddresses[].targetRef.kind)]|join(",")) // "-"),
+    "TARGET NAME": (([(.subsets[].notReadyAddresses[].targetRef.name)]|join(",")) // "-"),
+    "Creation Time": (.metadata.creationTimestamp // "-") }
+]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
+echo ""
+
 echo ""
 
 printf "%-20s \n" "Events:"
@@ -57,9 +77,13 @@ do
 
   printf "%-20s \n" "Subsets:"
 
-  # addresses
-  value=$(jq -r '.items['${i}'] | .subsets[] | [.addresses[].ip]|join(",")' ${1} 2>/dev/null)
-  printf "%-20s %s\\n" "  Addresses:" "${value}"
+  # ready addresses
+  value=$(jq -r '.items['${i}'] | .subsets[] | select (.addresses != null) | [.addresses[].ip]|join(",")' ${1} 2>/dev/null)
+  printf "%-20s %s\\n" "  Ready Addresses:" "${value}"
+
+  # not ready addresses
+  value=$(jq -r '.items['${i}'] | .subsets[] | select (.notReadyAddresses != null) | [.notReadyAddresses[].ip]|join(",")' ${1} 2>/dev/null)
+  printf "%-20s %s\\n" "  NOT Ready:" "${value}"
 
   printf "%-20s \n" "  Ports:"
   jq -r '[.items['${i}'].subsets[] | .ports[] | { 

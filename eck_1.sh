@@ -220,12 +220,12 @@ do
 ##     done
 ##   fi
 ## 
-##   # configmaps.json
-##   # v5
-##   if [ -e ${WORKDIR}/${namespace}/configmaps.json ] && [ $(du ${WORKDIR}/${namespace}/configmaps.json | cut -f1) -gt 9 ]; then
-##     echo "|-- [DEBUG] Parsing ConfigMaps"
-##     ${SCRIPTDIR}/eck_configmaps_1.sh ${WORKDIR}/${namespace}/configmaps.json > ${WORKDIR}/${namespace}/eck_configmaps.txt
-##   fi
+  # configmaps.json
+  # v5
+  if [ -e ${WORKDIR}/${namespace}/configmaps.json ] && [ $(du ${WORKDIR}/${namespace}/configmaps.json | cut -f1) -gt 9 ]; then
+    echo "|-- [DEBUG] Parsing configmaps.json"
+    ${SCRIPTDIR}/eck_configmaps_1.sh ${WORKDIR}/${namespace}/configmaps.json > ${WORKDIR}/${namespace}/eck_configmaps.txt
+  fi
 ## 
 ##   # deployments.json
 ##   # v5
@@ -243,20 +243,20 @@ do
 ##     done
 ##   fi
 ## 
-##   # endpoints.json
-##   # v5
-##   if [ -e ${WORKDIR}/${namespace}/endpoints.json ] && [ $(du ${WORKDIR}/${namespace}/endpoints.json | cut -f1) -gt 9 ]; then
-##     echo "|-- [DEBUG] Parsing Endpoints"
-##     ${SCRIPTDIR}/eck_endpoints_1.sh ${WORKDIR}/${namespace}/endpoints.json > ${WORKDIR}/${namespace}/eck_endpoints.txt
-##   fi
-## 
-##   # networkpolicies.json
-##   # FIX not done since no sample
-##   if [ -e ${WORKDIR}/${namespace}/networkpolicies.json ] && [ $(du ${WORKDIR}/${namespace}/networkpolicies.json | cut -f1) -gt 9 ]; then
-##     echo "|-- [DEBUG] Parsinfg networkpolicies.json"
-## #    ${SCRIPTDIR}/eck_networkpolicies_1.sh ${WORKDIR}/${namespace}/networkpolicies.json > ${WORKDIR}/${namespace}/networkpolicies.txt
-##   fi
-##   
+  # endpoints.json
+  # v5
+  if [ -e ${WORKDIR}/${namespace}/endpoints.json ] && [ $(du ${WORKDIR}/${namespace}/endpoints.json | cut -f1) -gt 9 ]; then
+    echo "|-- [DEBUG] Parsing endpoints.json"
+    ${SCRIPTDIR}/eck_endpoints_1.sh ${WORKDIR}/${namespace}/endpoints.json > ${WORKDIR}/${namespace}/eck_endpoints.txt
+  fi
+
+  # networkpolicies.json
+  # FIX not done since no sample
+  if [ -e ${WORKDIR}/${namespace}/networkpolicies.json ] && [ $(du ${WORKDIR}/${namespace}/networkpolicies.json | cut -f1) -gt 9 ]; then
+    echo "|-- [DEBUG] Parsinfg networkpolicies.json"
+#    ${SCRIPTDIR}/eck_networkpolicies_1.sh ${WORKDIR}/${namespace}/networkpolicies.json > ${WORKDIR}/${namespace}/networkpolicies.txt
+  fi
+  
   # persistentvolumeclaims.json
   # v5
   if [ -e ${WORKDIR}/${namespace}/persistentvolumeclaims.json ] && [ $(du ${WORKDIR}/${namespace}/persistentvolumeclaims.json | cut -f1) -gt 9 ]; then
