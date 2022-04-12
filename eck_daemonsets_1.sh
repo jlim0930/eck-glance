@@ -22,7 +22,7 @@ jq -r '
     "UP2DATE": (.status.updatedNumberScheduled // "-"),
     "AVAILABLE": (.status.numberAvailable // "-"),
     "CREATION TIME": (.metadata.creationTimestamp // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}   2>/dev/null | column -ts $'\t'
 echo ""
 
 echo "========================================================================================="
@@ -39,7 +39,7 @@ jq -r '
     "OWNER": (.metadata.ownerReferences[] | select(.controller==true) |.kind + "/" + .name // "-"),
     "CONTAINERS": ([.spec.template.spec.containers[].name]|join(",") // "-"),
     "IMAGES": ([.spec.template.spec.containers[].image]|join(",") // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  2>/dev/null  | column -ts $'\t'
 echo ""
 
 echo "========================================================================================="

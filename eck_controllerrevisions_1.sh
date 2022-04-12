@@ -20,7 +20,7 @@ jq -r '
     "APIVERSION": (.metadata.ownerReferences[] | select(.controller=='true')| .apiVersion // "-"),
     "CONTROLLER": (.metadata.ownerReferences[] | select(.controller=='true')| .kind + "/" + .name // "-"),
     "CREATION TIME": (.metadata.creationTimestamp // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  2>/dev/null | column -ts $'\t'
 echo ""
 
 echo "========================================================================================="

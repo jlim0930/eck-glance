@@ -97,7 +97,7 @@ do
     "Name": (.name // "-"),
     "Port": (.port // "-"),
     "Protocol": (.protocol // "-")
-    }] | (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t' | sed "s/^/                     /"
+    }] | (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  2>/dev/null | column -ts $'\t' | sed "s/^/                     /"
 
 
   echo ""

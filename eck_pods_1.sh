@@ -7,6 +7,14 @@ if [ ${count} = 0 ]; then
 fi
 
 echo "========================================================================================="
+echo "ITEMS TO NOTES:"
+echo " - Volume Claims template must be named elasticsearch-data or else you can have data loss"
+echo " - Don’t use emptyDir as data volume claims - it might generate permanent data loss."
+echo "========================================================================================="
+echo ""
+echo ""
+
+echo "========================================================================================="
 echo "POD Summary - for details please look at eck_pod-<name>.txt"
 echo "========================================================================================="
 echo ""
@@ -41,7 +49,7 @@ jq -r '
     "OWNER": (.metadata.ownerReferences[] | select(.controller==true) |.kind + "/" + .name // "-"),
     "CONTAINERS": ([.spec.containers[].name]|join(",") // "-"),
     "IMAGES": ([.spec.containers[].image]|join(",") // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null  | column -ts $'\t'
 echo ""
 
 #
@@ -65,7 +73,7 @@ jq -r '
     "QoS Class": (.status.qosClass // "-"),
   }
 ]
-| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
+| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  2>/dev/null | column -ts $'\t'
 echo ""
 
 echo "========================================================================================="
@@ -84,7 +92,7 @@ jq -r '
      "SECURITY CONTEXT": ((.spec.securityContext| (to_entries[] | "\(.key)=\(.value)") | select(length >0)) // "-"), 
     "AFFINITY": ((.spec.affinity.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution[].podAffinityTerm.labelSelector.matchLabels|(to_entries[] | "\(.key)=\(.value)"))? // "-"),
     "SERVICE LINKS": (.spec.enableServiceLinks|tostring // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  2>/dev/null  | column -ts $'\t'
 echo ""
 
 echo "========================================================================================="
@@ -100,7 +108,7 @@ jq -r '
   "OPERATOR": (.operator // "-"),
   "EFFECT": (.effect // "-"),
   "TOLERATION": (.tolerationSeconds // "-")
-})]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
+})]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  2>/dev/null | column -ts $'\t'
 
 # FIX - format a bit cleaner
 echo "========================================================================================="
@@ -116,7 +124,7 @@ jq -r '["NAME","VOLUME NAME","CLAIM NAME"],
 (.name // "-"),
 (.persistentVolumeClaim.claimName // "-")]))
 | join(",")
-' ${1} | column -t -s ","
+' ${1}  2>/dev/null | column -t -s ","
 echo ""
 
 echo "Secrets" | sed "s/^/                     /"
@@ -130,7 +138,7 @@ jq -r '["NAME","SECRET","NAME","DEFAULT MODE","OPTIONAL"],
 (.secret.defaultMode|tostring // "-"),
 (.secret.optional|tostring // "-")]))
 | join(",")
-' ${1} | column -t -s ","
+' ${1}  2>/dev/null | column -t -s ","
 echo ""
 
 echo "ConfigMaps" | sed "s/^/                     /"
@@ -144,7 +152,7 @@ jq -r '["NAME","CONFIG MAP","NAME","DEFAULT MODE","OPTIONAL"],
 (.configMap.defaultMode|tostring // "-"),
 (.configMap.optional|tostring // "-")]))
 | join(",")
-' ${1} | column -t -s ","
+' ${1}  2>/dev/null | column -t -s ","
 echo ""
 
 echo "emptyDir" | sed "s/^/                     /"
@@ -155,7 +163,7 @@ jq -r '["NAME","EMPTYDIR NAME"],
 | [ $podname,
 (.name // "-")]))
 | join(",")
-' ${1} | column -t -s ","
+' ${1} 2>/dev/null  | column -t -s ","
 echo ""
 
 echo "========================================================================================="

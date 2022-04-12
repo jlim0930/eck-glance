@@ -28,7 +28,7 @@ do
   # sort and collect events
   if [ -e ${WORKDIR}/${namespace}/events.json ]&& [ $(du ${WORKDIR}/${namespace}/events.json | cut -f1) -gt 9 ]; then
     echo "|-- [DEBUG] Parsing events.json"
-    ${SCRIPTDIR}/eck_events_1.sh ${WORKDIR}/${namespace}/events.json > ${WORKDIR}/${namespace}/eck_events.txt 2>/dev/null
+    ${SCRIPTDIR}/eck_events_1.sh ${WORKDIR}/${namespace}/events.json  > ${WORKDIR}/${namespace}/eck_events.txt 2>/dev/null
     echo "|-- [DEBUG] Parsing events.json per kind"
     for kind in `cat ${WORKDIR}/${namespace}/eck_events.txt | grep -v creationTime | grep -v "======" | awk {' print $4 '} | sort -n | uniq`
     do
@@ -81,10 +81,16 @@ do
   fi
 
 # agent.json
-# FIX - didnt have an example so didnt work on it
   if [ -e ${WORKDIR}/${namespace}/agent.json ] && [ $(du ${WORKDIR}/${namespace}/agent.json | cut -f1) -gt 9 ]; then
     echo "|-- [DEBUG] Parsing agent.json"
     ${SCRIPTDIR}/eck_agent_1.sh ${WORKDIR}/${namespace}/agent.json > ${WORKDIR}/${namespace}/eck_agents.txt
+
+    agentlist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/agent.json`
+    for agent in ${agentlist}
+    do
+      echo "  |---- [DEBUG] Parsing agent.json.json for ${agent}"
+      ${SCRIPTDIR}/eck_agent_2.sh ${WORKDIR}/${namespace}/agent.json ${agent} > ${WORKDIR}/${namespace}/eck_agent-${agent}.txt    
+    done
   fi
 
   # apmserver.json
@@ -116,7 +122,7 @@ do
   # elasticmapsserver.json
   if [ -e ${WORKDIR}/${namespace}/elasticmapsserver.json ] && [ $(du ${WORKDIR}/${namespace}/elasticmapsserver.json | cut -f1) -gt 9 ]; then
     echo "|-- [DEBUG] Parsing elasticmapsserver.json"
-    ${SCRIPTDIR}/eck_elasticmapsserver_1.sh ${WORKDIR}/${namespace}/elasticmapsserver.json > ${WORKDIR}/${namespace}/elasticmapsservers.txt
+    ${SCRIPTDIR}/eck_elasticmapsserver_1.sh ${WORKDIR}/${namespace}/elasticmapsserver.json > ${WORKDIR}/${namespace}/eck_elasticmapsservers.txt 
 
     esmaplist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/elasticmapsserver.json`
     for esmap in ${esmaplist}

@@ -223,7 +223,7 @@ if [ ${count} -gt 0 ] || [ -z ${count} ]; then
 
     # initContainer Command
     echo "------------------------------------------------------------------------------------  Command"
-    jq -r '([.items[] | select(.metadata.name=="'${2}'").spec.template.spec.initContainers['${i}'].command[]] |join(" ") // "-")' ${1} | sed 's/\\n/\n/g; s/\\t/\t/g' 2>/dev/null
+    jq -r '([.items[] | select(.metadata.name=="'${2}'").spec.template.spec.initContainers['${i}'].command[]] |join(" ") // "-")' ${1}  2>/dev/null | sed 's/\\n/\n/g; s/\\t/\t/g' 2>/dev/null
     echo ""
   done
   echo ""

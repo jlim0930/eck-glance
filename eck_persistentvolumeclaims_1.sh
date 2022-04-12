@@ -7,6 +7,14 @@ if [ ${count} = 0 ]; then
 fi
 
 echo "========================================================================================="
+echo "ITEMS TO NOTES:"
+echo " - Volume Claims template must be named elasticsearch-data or else you can have data loss"
+echo " - Don’t use emptyDir as data volume claims - it might generate permanent data loss."
+echo "========================================================================================="
+echo ""
+echo ""
+
+echo "========================================================================================="
 echo "PersistentVolumeClaims Summary"
 echo "========================================================================================="
 echo ""
@@ -23,7 +31,7 @@ jq -r '
     "STORAGECLASS": (.spec.storageClassName // "-"),
     "VOLUME MODE": (.spec.volumeMode // "-"),
     "CREATION TIME": (.metadata.creationTimestamp // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  2>/dev/null  | column -ts $'\t'
 echo ""
 echo ""
 
@@ -40,7 +48,7 @@ jq -r '
     "NAME": (.metadata.name // "-"),
     "APIVERSION": (select(.metadata.ownerReferences != null) |.metadata.ownerReferences[] | select(.name !=null) | ((.apiVersion) // "-")),
     "OWNER": (select(.metadata.ownerReferences != null) |.metadata.ownerReferences[] | select(.name !=null) | ((.name) // "-"))
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  2>/dev/null  | column -ts $'\t'
 echo ""
 echo ""
 
@@ -103,7 +111,7 @@ do
 
   # finalizers
   printf "%-20s \n" "Finalizers:"
-  jq -r '.items['${i}'] | .metadata.finalizers[]' ${1} | sed "s/^/                     /"
+  jq -r '.items['${i}'] | .metadata.finalizers[]' ${1}  2>/dev/null | sed "s/^/                     /"
 
   # capacity
   value=$(jq -r '.items['${i}'] | (.spec.resources.requests.storage // "-")' ${1} 2>/dev/null)

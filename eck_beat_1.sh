@@ -27,7 +27,7 @@ jq -r '
     "KIND": (.spec.type // "-"),
     "APIVERSION": (.apiVersion // "-"),
     "CREATION TIME": (.metadata.creationTimestamp // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  2>/dev/null | column -ts $'\t'
 echo ""
 echo ""
 
@@ -49,5 +49,5 @@ jq -r '
     "KB REF": (.spec.kibanaRef.name // "-"),
     "KB ASSOCIATION": (.status.kibanaAssociationStatus // "-"),
     "SELECTOR": (.status.selector // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  2>/dev/null | column -ts $'\t'
 echo ""

@@ -25,7 +25,7 @@ jq -r '
     "KIND": (.spec.type // "-"),
     "APIVERSION": (.apiVersion // "-"),
     "CREATION TIME": (.metadata.creationTimestamp // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null  | column -ts $'\t'
 echo ""
 echo ""
 
@@ -43,7 +43,7 @@ jq -r '
     "ES REF": (.spec.elasticsearchRef.name // "-"),
     "ES ASSOCIATION": (.status.elasticsearchAssociationStatus // "-"),
     "SELECTOR": (.status.selector // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  2>/dev/null | column -ts $'\t'
 echo ""
 
 

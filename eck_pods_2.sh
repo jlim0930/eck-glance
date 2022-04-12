@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 
-# pod summary
+
+echo "========================================================================================="
+echo "ITEMS TO NOTES:"
+echo " - Volume Claims template must be named elasticsearch-data or else you can have data loss"
+echo " - Don’t use emptyDir as data volume claims - it might generate permanent data loss."
+echo "========================================================================================="
+echo ""
+echo ""
+
 
 # POD SECTION
 echo "========================================================================================="
