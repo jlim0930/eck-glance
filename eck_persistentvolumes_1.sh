@@ -104,11 +104,20 @@ do
   echo ""
 done # end of i (main loop)
 
-printf "%-20s \n" "Events:"
-cat ${WORKDIR}/${namespace}/eck_events.txt | grep "ConfigMap"
-echo ""
-echo ""
-echo ""
+
+# events
+if [ -f eck_events.txt ]; then
+  echo ""
+  printf "%-20s \n" "Events:"
+  cat eck_events.txt | grep "PersistentVolume"
+  echo ""
+elif [ -f ${WORKDIR}/${namespace}/eck_events.txt ]; then
+  echo ""
+  printf "%-20s \n" "Events:"
+  cat ${WORKDIR}/${namespace}/eck_events.txt | grep "PersistentVolume"
+  echo ""
+fi
+
 
 
 echo ""

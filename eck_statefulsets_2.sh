@@ -1,67 +1,76 @@
 #!/usr/bin/env bash
 
 echo "========================================================================================="
-echo "${ss} - Statefulset DESCRIBE"
+echo "${2} - Statefulset DESCRIBE"
 echo "========================================================================================="
 echo ""
 
 # name
-printf "%-20s %s\\n" "Name:" "${ss}"
+printf "%-20s %s\\n" "Name:" "${2}"
 
 # namespace
-value=$(jq -r '.items[] | select(.metadata.name=="'${ss}'") | (.metadata.namespace // "-")' ${1} 2>/dev/null)
+value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.metadata.namespace // "-")' ${1} 2>/dev/null)
 printf "%-20s %s \n" "Namespace:" "${value}"
 
 # CreationTimestamp
-value=$(jq -r '.items[] | select(.metadata.name=="'${ss}'") | (.metadata.creationTimestamp // "-")' ${1} 2>/dev/null)
+value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.metadata.creationTimestamp // "-")' ${1} 2>/dev/null)
 printf "%-20s %s \n" "CreationTimestamp:" "${value}"
 
 # selector
 printf "%-20s \n" "Selectors:"
-jq -r '.items[] | select(.metadata.name=="'${ss}'").spec.selector.matchLabels | (to_entries[] | "\(.key)=\(.value)"), "" | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
+jq -r '.items[] | select(.metadata.name=="'${2}'").spec.selector.matchLabels | (to_entries[] | "\(.key)=\(.value)"), "" | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
 
 # labels
 printf "%-20s \n" "Labels:"
-jq -r '.items[] | select(.metadata.name=="'${ss}'").metadata.labels | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
+jq -r '.items[] | select(.metadata.name=="'${2}'").metadata.labels | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
 
 # annotations
 printf "%-20s \n" "Annotations:"
-jq -r '.items[] | select(.metadata.name=="'${ss}'").metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
+jq -r '.items[] | select(.metadata.name=="'${2}'").metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
 
 
 
 ##### SS specific stuff
 # replicas
-value=$(jq -r '.items[] | select(.metadata.name=="'${ss}'") | ((.status.replicas|tostring) + " desired | " + (.status.readyReplicas|tostring) + " total" // "-")' ${1} 2>/dev/null)
+value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | ((.status.replicas|tostring) + " desired | " + (.status.readyReplicas|tostring) + " total" // "-")' ${1} 2>/dev/null)
 printf "%-20s %s\\n" "Replicas:" "${value}"
 
 # updateStrategy
-value=$(jq -r '.items[] | select(.metadata.name=="'${ss}'") | (.spec.updateStrategy.type // "-")' ${1} 2>/dev/null)
+value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.spec.updateStrategy.type // "-")' ${1} 2>/dev/null)
 printf "%-20s %s\\n" "UpdateStrategy:" "${value}"
 
 # affinity
 # FIX - might need fix if object doesnt exist - fixed need to test
-value=$(jq -r '.items[] | select(.metadata.name=="'${ss}'") | ((.spec.template.spec.affinity.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution[].podAffinityTerm.labelSelector.matchLabels|(to_entries[] | "\(.key)=\(.value)"))? // "-")' ${1} 2>/dev/null)
+value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | ((.spec.template.spec.affinity.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution[].podAffinityTerm.labelSelector.matchLabels|(to_entries[] | "\(.key)=\(.value)"))? // "-")' ${1} 2>/dev/null)
 printf "%-20s %s\\n" "Affinity:" "${value}"
 ##### SS specific stuff
 
 
 # apiVersion
-value=$(jq -r '.items[] | select(.metadata.name=="'${ss}'") | (.metadata.ownerReferences[] | select(.controller==true) |.apiVersion|tostring // "-")' ${1} 2>/dev/null)
+value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.metadata.ownerReferences[] | select(.controller==true) |.apiVersion|tostring // "-")' ${1} 2>/dev/null)
 printf "%-20s %s\\n" "apiVersion:" "${value}"
 
 # owner Reference
-value=$(jq -r '.items[] | select(.metadata.name=="'${ss}'") | (.metadata.ownerReferences[] | select(.controller==true) |.kind + "/" + .name // "-")' ${1} 2>/dev/null)
+value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.metadata.ownerReferences[] | select(.controller==true) |.kind + "/" + .name // "-")' ${1} 2>/dev/null)
 printf "%-20s %s\\n" "Owner Reference:" "${value}"
 
-printf "%-20s \n" "Events:"
-cat ${WORKDIR}/${namespace}/eck_events.txt | grep "StatefulSet/${ss}"
-echo ""
+# events
+if [ -f eck_events.txt ]; then
+  echo ""
+  printf "%-20s \n" "Events:"
+  cat eck_events.txt | grep "StatefulSet/${2}"
+  echo ""
+elif [ -f ${WORKDIR}/${namespace}/eck_events.txt ]; then
+  echo ""
+  printf "%-20s \n" "Events:"
+  cat ${WORKDIR}/${namespace}/eck_events.txt | grep "StatefulSet/${2}"
+  echo ""
+fi
 
 # volume claims
 printf "%-20s \n" "Volume Claims:"
 jq -r '
-[.items[] | select(.metadata.name=="'${ss}'")
+[.items[] | select(.metadata.name=="'${2}'")
 | {
     "Name": .metadata.name} +
       (.spec.volumeClaimTemplates[] | {
@@ -78,11 +87,11 @@ printf "%-20s \n" "Pod Template:"
 
 # labels
 printf "%-20s \n" "  Labels:"
-jq -r '.items[] | select(.metadata.name=="'${ss}'").spec.template.metadata.labels | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
+jq -r '.items[] | select(.metadata.name=="'${2}'").spec.template.metadata.labels | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
 
 # annotations
 printf "%-20s \n" "  Annotations:"
-jq -r '.items[] | select(.metadata.name=="'${ss}'").spec.template.metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
+jq -r '.items[] | select(.metadata.name=="'${2}'").spec.template.metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
 echo ""
 
 
@@ -91,7 +100,7 @@ printf "%-20s \n" "  Volumes:"
 echo "ConfigMap" | sed "s/^/                     /"
 jq -r '
   [.items[]
-  | select(.metadata.name=="'${ss}'")
+  | select(.metadata.name=="'${2}'")
   | .spec.template.spec.volumes[]
   | select(.configMap != null)
   | {
@@ -106,7 +115,7 @@ echo ""
 echo "Secrets" | sed "s/^/                     /"
 jq -r '
   [.items[]
-  | select(.metadata.name=="'${ss}'")
+  | select(.metadata.name=="'${2}'")
   | .spec.template.spec.volumes[]
   | select(.secret != null)
   | {
@@ -121,7 +130,7 @@ echo ""
 echo "EmptyDir" | sed "s/^/                     /"
 jq -r '
   [.items[]
-  | select(.metadata.name=="'${ss}'")
+  | select(.metadata.name=="'${2}'")
   | .spec.template.spec.volumes[]
   | select(.emptyDir != null)
   | {
@@ -133,20 +142,20 @@ echo ""
 echo ""
 count=0
 # InitContainers
-count=`jq '.items[] | select(.metadata.name=="'${ss}'").spec.template.spec.initContainers | length' ${1} 2>/dev/null`
+count=`jq '.items[] | select(.metadata.name=="'${2}'").spec.template.spec.initContainers | length' ${1} 2>/dev/null`
 if [ ${count} -gt 0 ] || [ -z ${count} ]; then
   echo "========================================================================================="
-  echo "StatefulSet: ${ss} POD Template InitContainers"
+  echo "StatefulSet: ${2} POD Template InitContainers"
   echo "========================================================================================="
   echo ""
 
   for ((i=0; i<$count; i++))
   do
-    initcontainername=`jq -r '.items[] | select(.metadata.name=="'${ss}'").spec.template.spec.initContainers['${i}'].name' ${1}`
+    initcontainername=`jq -r '.items[] | select(.metadata.name=="'${2}'").spec.template.spec.initContainers['${i}'].name' ${1}`
     echo "====== Container: ${initcontainername} ====================================================="
     echo ""
     jq -r '
-    [.items[] | select(.metadata.name=="'${ss}'").spec.template.spec.initContainers['${i}']
+    [.items[] | select(.metadata.name=="'${2}'").spec.template.spec.initContainers['${i}']
     | {
         "Name": (.name // "-"),
         "CPU Request": (.resources.requess.cpu // "-"),
@@ -161,7 +170,7 @@ if [ ${count} -gt 0 ] || [ -z ${count} ]; then
     echo "------------------------------------------------------------------------------------  Volumes"
     echo ""
     jq -r '
-    [.items[] | select(.metadata.name=="'${ss}'").spec.template.spec.initContainers['${i}'].volumeMounts[]
+    [.items[] | select(.metadata.name=="'${2}'").spec.template.spec.initContainers['${i}'].volumeMounts[]
     | {
       "Name": (.name // "-"),  
       "Mount Path": (.mountPath // "-"),
@@ -171,7 +180,7 @@ if [ ${count} -gt 0 ] || [ -z ${count} ]; then
 
     echo "------------------------------------------------------------------------------------  ENVs"
     jq -r '
-    [.items[] | select(.metadata.name=="'${ss}'").spec.template.spec.initContainers['${i}'].env[]
+    [.items[] | select(.metadata.name=="'${2}'").spec.template.spec.initContainers['${i}'].env[]
     | {
       "name": (.name // "-"),
       "value": (.value // .valueFrom.fieldRef.fieldPath)
@@ -179,7 +188,7 @@ if [ ${count} -gt 0 ] || [ -z ${count} ]; then
     echo ""
 
     echo "------------------------------------------------------------------------------------  Command"
-    jq -r '([.items[] | select(.metadata.name=="'${ss}'").spec.template.spec.initContainers['${i}'].command[]] |join(" ") // "-")' ${1} | sed 's/\\n/\n/g; s/\\t/\t/g' 2>/dev/null
+    jq -r '([.items[] | select(.metadata.name=="'${2}'").spec.template.spec.initContainers['${i}'].command[]] |join(" ") // "-")' ${1} | sed 's/\\n/\n/g; s/\\t/\t/g' 2>/dev/null
     echo ""
   done
   echo ""
@@ -189,19 +198,19 @@ echo ""
 echo ""
 count=0
 # CONTAINER SECTION
-count=`jq '.items[] | select(.metadata.name=="'${ss}'").spec.template.spec.containers | length' ${1} 2>/dev/null` 
+count=`jq '.items[] | select(.metadata.name=="'${2}'").spec.template.spec.containers | length' ${1} 2>/dev/null` 
 if [ ${count} -gt 0 ] || [ -z ${count} ]; then
   echo "========================================================================================="
-  echo "StatefulSet: ${ss} POD Template Containers"
+  echo "StatefulSet: ${2} POD Template Containers"
   echo "========================================================================================="
   echo ""
   for ((i=0; i<$count; i++))
   do
-    containername=`jq -r '.items[] | select(.metadata.name=="'${ss}'").spec.template.spec.containers['${i}'].name' ${1}`
+    containername=`jq -r '.items[] | select(.metadata.name=="'${2}'").spec.template.spec.containers['${i}'].name' ${1}`
     echo "====== Container: ${containername} ====================================================="
     echo ""
     jq -r '
-    [.items[] | select(.metadata.name=="'${ss}'").spec.template.spec.containers['${i}']
+    [.items[] | select(.metadata.name=="'${2}'").spec.template.spec.containers['${i}']
     | {
         "Container Name": (.name // "-"),
         "CPU Request": (.resources.requess.cpu // "-"),
@@ -215,7 +224,7 @@ if [ ${count} -gt 0 ] || [ -z ${count} ]; then
     # CONTAINER network
     echo "------------------------------------------------------------------------------------  Network"
     jq -r '
-    [.items[] | select(.metadata.name=="'${ss}'").spec.template.spec.containers['${i}'].ports[]
+    [.items[] | select(.metadata.name=="'${2}'").spec.template.spec.containers['${i}'].ports[]
     | {
       "Name": (.name // "-"),
       "ContainerPort": (.containerPort // "-"),
@@ -226,7 +235,7 @@ if [ ${count} -gt 0 ] || [ -z ${count} ]; then
     # CONTAINER volumes
     echo "------------------------------------------------------------------------------------  Volumes"
     jq -r '
-    [.items[] | select(.metadata.name=="'${ss}'").spec.template.spec.containers['${i}'].volumeMounts[]
+    [.items[] | select(.metadata.name=="'${2}'").spec.template.spec.containers['${i}'].volumeMounts[]
     | {
       "Name": (.name // "-"),  
       "Mount Path": (.mountPath // "-"),
@@ -237,7 +246,7 @@ if [ ${count} -gt 0 ] || [ -z ${count} ]; then
     # CONTAINER env
     echo "------------------------------------------------------------------------------------  Envs"
     jq -r '
-    [.items[] | select(.metadata.name=="'${ss}'").spec.template.spec.containers['${i}'].env[]
+    [.items[] | select(.metadata.name=="'${2}'").spec.template.spec.containers['${i}'].env[]
     | {
       "Name": (.name // "-"),
       "Value": (.value // .valueFrom.fieldRef.fieldPath // .valueFrom.secretKeyRef.name)
@@ -245,11 +254,11 @@ if [ ${count} -gt 0 ] || [ -z ${count} ]; then
     echo ""
 
     echo "------------------------------------------------------------------------------------  Readiness Probe"
-    jq -r '([.items[] | select(.metadata.name=="'${ss}'").spec.template.spec.containers['${i}'].readinessProbe.exe.command[]] |join(" ") // "-")' ${1}  2>/dev/null | sed 's/\\n/\n/g; s/\\t/\t/g'
+    jq -r '([.items[] | select(.metadata.name=="'${2}'").spec.template.spec.containers['${i}'].readinessProbe.exe.command[]] |join(" ") // "-")' ${1}  2>/dev/null | sed 's/\\n/\n/g; s/\\t/\t/g'
     echo ""  
 
     echo "------------------------------------------------------------------------------------  Lifecycle preStop"
-    jq -r '([.items[] | select(.metadata.name=="'${ss}'").spec.template.spec.containers['${i}'].lifecycle.preStop.exec.command[]] |join(" ") // "-")' ${1} 2>/dev/null | sed 's/\\n/\n/g; s/\\t/\t/g' 2>/dev/null
+    jq -r '([.items[] | select(.metadata.name=="'${2}'").spec.template.spec.containers['${i}'].lifecycle.preStop.exec.command[]] |join(" ") // "-")' ${1} 2>/dev/null | sed 's/\\n/\n/g; s/\\t/\t/g' 2>/dev/null
     echo ""
 
   done # end of loop (containers)

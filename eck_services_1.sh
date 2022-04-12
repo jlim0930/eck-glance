@@ -143,10 +143,18 @@ do
   if ! [ -n "${value}" ]; then value="<Empty>"; fi
   printf "%-20s %s\\n" "Ext Traffic Policy:" "${value}"
 
-  echo ""
   # events
+if [ -f eck_events.txt ]; then
+  echo ""
   printf "%-20s \n" "Events:"
-  cat ${WORKDIR}/${namespace}/eck_events.txt | grep "Service/${service}"
+  cat eck_events.txt | grep "Service"
+  echo ""
+elif [ -f ${WORKDIR}/${namespace}/eck_events.txt ]; then
+  echo ""
+  printf "%-20s \n" "Events:"
+  cat ${WORKDIR}/${namespace}/eck_events.txt | grep "Service"
+  echo ""
+fi
 
   echo ""
   echo ""

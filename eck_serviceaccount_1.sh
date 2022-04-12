@@ -54,10 +54,18 @@ do
   printf "%-20s \n" "Secrets:"
   jq -r '(.items[] | select(.metadata.name=="'${sa}'") | [.secrets[].name] | join(",") // "-")' ${1} 2>/dev/null | sed "s/^/                     /"
 
-  echo ""
   # events
+if [ -f eck_events.txt ]; then
+  echo ""
   printf "%-20s \n" "Events:"
-  cat ${WORKDIR}/${namespace}/eck_events.txt | grep "ServiceAccount/${sa}"
+  cat eck_events.txt | grep "ServiceAccount"
+  echo ""
+elif [ -f ${WORKDIR}/${namespace}/eck_events.txt ]; then
+  echo ""
+  printf "%-20s \n" "Events:"
+  cat ${WORKDIR}/${namespace}/eck_events.txt | grep "ServiceAccount"
+  echo ""
+fi
 
   echo ""
 

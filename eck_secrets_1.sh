@@ -73,12 +73,19 @@ do
   printf "%-20s \n" "Annotations:"
   jq -r '.Items['${i}'].metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null | sed "s/^/                     /"
   
-  echo ""
+
   # events
+if [ -f eck_events.txt ]; then
+  echo ""
   printf "%-20s \n" "Events:"
-  cat ${WORKDIR}/${namespace}/eck_events.txt | grep "Secret/${secret}"
+  cat eck_events.txt | grep "Secret"
   echo ""
+elif [ -f ${WORKDIR}/${namespace}/eck_events.txt ]; then
   echo ""
+  printf "%-20s \n" "Events:"
+  cat ${WORKDIR}/${namespace}/eck_events.txt | grep "Secret"
+  echo ""
+fi
 
 done # end of i (main loop)
 echo ""

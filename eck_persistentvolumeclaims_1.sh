@@ -44,9 +44,18 @@ jq -r '
 echo ""
 echo ""
 
-printf "%-20s \n" "Events:"
-cat ${WORKDIR}/${namespace}/eck_events.txt | grep "PersistentVolumeClaim"
-echo ""
+# events
+if [ -f eck_events.txt ]; then
+  echo ""
+  printf "%-20s \n" "Events:"
+  cat eck_events.txt | grep "PersistentVolumeClaim"
+  echo ""
+elif [ -f ${WORKDIR}/${namespace}/eck_events.txt ]; then
+  echo ""
+  printf "%-20s \n" "Events:"
+  cat ${WORKDIR}/${namespace}/eck_events.txt | grep "PersistentVolumeClaim"
+  echo ""
+fi
 
 echo ""
 echo ""

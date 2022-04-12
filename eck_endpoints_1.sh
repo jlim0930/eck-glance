@@ -42,11 +42,18 @@ jq -r '
 ]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t'
 echo ""
 
-echo ""
-
-printf "%-20s \n" "Events:"
-cat ${WORKDIR}/${namespace}/eck_events.txt | grep "Endpoint"
-echo ""
+# events
+if [ -f eck_events.txt ]; then
+  echo ""
+  printf "%-20s \n" "Events:"
+  cat eck_events.txt | grep "Endpoint"
+  echo ""
+elif [ -f ${WORKDIR}/${namespace}/eck_events.txt ]; then
+  echo ""
+  printf "%-20s \n" "Events:"
+  cat ${WORKDIR}/${namespace}/eck_events.txt | grep "Endpoint"
+  echo ""
+fi
 
 echo ""
 echo ""

@@ -8,7 +8,7 @@ fi
 
 echo "========================================================================================="
 #### make update
-echo "ELASTICSEARCH Summary - for details pleast look at eck_TEMPLATE2-<name>.txt"
+echo "ELASTICSEARCH Summary - for details pleast look at eck_elasticsearch-<name>.txt"
 echo "========================================================================================="
 echo ""
 
@@ -23,7 +23,7 @@ jq -r '
     "VERSION": (.status.version // "-"),
     "PHASE": (.status.phase // "-"),
     "GENERATION": (.metadata.generation // "-"),
-    "KIND": (.spec.type // "-"),
+    "KIND": (.spec.kind // "-"),
     "APIVERSION": (.apiVersion // "-"),
     "CREATION TIME": (.metadata.creationTimestamp // "-")
   }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
