@@ -38,7 +38,7 @@ All other `eck_*.txt` are for kubernetes kinds
 After the `eck-glance` runs I would start looking at eck_events.txt from the `<namespace>` directory, then eck_pods.txt, etc.. depending on the issue at hand.
 
 
-TODO
+## TODO
 
 * Find `# FIX` for things to fix.
 * Validate code against different diags to ensure proper coverage
