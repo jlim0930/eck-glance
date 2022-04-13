@@ -19,13 +19,14 @@ In the main ECK diag directory `eck_nodes.txt`
 In each name space any elastic related items will be `eck_[elasticsearc|beat|agent|kibana|enterprisesearch/elasticmapservice]*.txt`
 All other `eck_*.txt` are for kubernetes kinds
 
-StatefulSets - manages elasticsearch
-ReplicaSets - manages beats(metricbeats/etc that runs on 1 or more host)/apmserver/kibana
-DaemonSets - manages filebeat(or anything that needs to run on all kubernetes hosts)
-Secrets - list of secrets like passwords,certificates,etc
-Services - list of services
-...
+- StatefulSets - manages elasticsearch
+- ReplicaSets - manages beats(metricbeats/etc that runs on 1 or more host)/apmserver/kibana
+- DaemonSets - manages filebeat(or anything that needs to run on all kubernetes hosts)
+- Secrets - list of secrets like passwords,certificates,etc
+- Services - list of services
+- ...
 
+---
 
 * If you want to run individual jobs all` eck_*_1.sh`, scripts can be ran with `eck_*_1.sh /path/file.json`
   Example: `/path/eck_beat_1.sh beat.json`
