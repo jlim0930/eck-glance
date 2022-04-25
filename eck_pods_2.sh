@@ -70,7 +70,7 @@ printf "%-20s %s \n" "QoS Class:" "${value}"
 # FIX - need to format better
 # affinity node selector
 printf "%-20s \n" "Affinity:"
-jq -r '.items[] | select(.metadata.name=="'${2}'").spec.affinity.nodeAffinity' ${1} 2>/dev/null | sed "s/^/                     /"
+jq -r '.items[] | select(.metadata.name=="'${2}'").spec.affinity' ${1} 2>/dev/null | sed "s/^/                     /"
 
 # pod tolerations
 printf "%-20s \n" "Tolerations:"
