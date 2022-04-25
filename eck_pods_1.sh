@@ -20,6 +20,7 @@ echo "==========================================================================
 echo ""
 # FIX - # would be good to make status look better
 # FIX - containerStatuses[] is array need to iterate or find total
+# FIX - if there are more than 1 container per pod it loops and generates multiple lines for the same thing
 jq -r '
 [.items
 | sort_by(.metdata.name)[]
