@@ -20,15 +20,16 @@ echo "==========================================================================
 echo ""
 # FIX - # would be good to make status look better
 # FIX - containerStatuses[] is array need to iterate or find total
-# FIX - if there are more than 1 container per pod it loops and generates multiple lines for the same thing
+# GOOD EXAMPLE WITH COUNT
 jq -r '
+def count(stream): reduce stream as $i (0; .+1);
 [.items
 | sort_by(.metdata.name)[]
 | {
     "NAME": (.metadata.name // "-"),
-    "READY": (( ([.status.containerStatuses[]|select((.ready|tostring)=="true")]|length|tostring) + "/" + ([.status.containerStatuses[].name]|length|tostring) )// "-"),
-    "STATUS": (.status.containerStatuses[].state|to_entries[].key // "-"),
-    "RESTARTS": (.status.containerStatuses[].restartCount // "-"),
+    "READY": ((count (.status.containerStatuses[] | select (.ready==true))|tostring) + "/" + (count (.status.containerStatuses[] | select (.started==true))|tostring) // "-"),
+    "READY STATUS": (.status.conditions[] | select (.type=="Ready") | .status // "-"),
+    "RESTARTS": ([.status.containerStatuses[].restartCount]|add // "-"),
     "LAST STARTTIME": (.status.startTime // "-"),
     "NODE": (.spec.nodeName // "-"),
     "CREATED": (.metadata.creationTimestamp // "-")
