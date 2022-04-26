@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # count of array
-count=`jq '.items | length' ${1}`
+count=`jq '.items | length' "${1}"`
 if [ ${count} = 0 ]; then
  exit
 fi
@@ -26,7 +26,7 @@ jq -r '
     "KIND": (.spec.kind // "-"),
     "APIVERSION": (.apiVersion // "-"),
     "CREATION TIME": (.metadata.creationTimestamp // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  2>/dev/null | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}"  2>/dev/null | column -ts $'\t'
 echo ""
 echo ""
 
@@ -44,7 +44,7 @@ jq -r '
     "SERVICE": (.status.service // "-"),
     "SECRET TOKEN": (.status.secretTokenSecret // "-"),
     "SELECTOR": (.status.selector // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  2>/dev/null | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}"  2>/dev/null | column -ts $'\t'
 echo ""
 
 

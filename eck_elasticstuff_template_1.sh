@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # count of array
-count=`jq '.items | length' ${1}`
+count=`jq '.items | length' "${1}"`
 if [ ${count} = 0 ]; then
  exit
 fi
@@ -35,7 +35,7 @@ jq -r '
     "KIND": (.spec.type // "-"),
     "APIVERSION": (.apiVersion // "-"),
     "CREATION TIME": (.metadata.creationTimestamp // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" | column -ts $'\t'
 echo ""
 echo ""
 
@@ -57,7 +57,7 @@ jq -r '
     "KB REF": (.spec.kibanaRef.name // "-"),
     "KB ASSOCIATION": (.status.kibanaAssociationStatus // "-"),
     "SELECTOR": (.status.selector // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" | column -ts $'\t'
 echo ""
 
 # APM
@@ -72,7 +72,7 @@ jq -r '
     "KB REF": (.spec.kibanaRef.name // "-"),
     "KB ASSOCIATION": (.status.kibanaAssociationStatus // "-"),
     "SELECTOR": (.status.selector // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" | column -ts $'\t'
 echo ""
 
 # KIBANA
@@ -84,7 +84,7 @@ jq -r '
     "ES REF": (.spec.elasticsearchRef.name // "-"),
     "ES ASSOCIATION": (.status.elasticsearchAssociationStatus // "-"),
     "SELECTOR": (.status.selector // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" | column -ts $'\t'
 echo ""
 
 # ELASTICSEARCH
@@ -100,7 +100,7 @@ jq -r '
     "KB REF": (.spec.kibanaRef.name // "-"),
     "KB ASSOCIATION": (.status.kibanaAssociationStatus // "-"),
     "SELECTOR": (.status.selector // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" | column -ts $'\t'
 echo ""
 
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # count of array
-count=`jq '.items | length' ${1}`
+count=`jq '.items | length' "${1}"`
 if [ ${count} = 0 ]; then
  exit
 fi
@@ -32,7 +32,7 @@ jq -r '
     "ZONE": (.metadata.labels."topology.kubernetes.io/zone" // "-"),
     "kubelet Version": (.status.nodeInfo.kubeletVersion // "-"),
     "Runtime Version": (.status.nodeInfo.containerRuntimeVersion // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  2>/dev/null | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}"  2>/dev/null | column -ts $'\t'
 echo ""
 
 echo "========================================================================================="
@@ -54,7 +54,7 @@ jq -r '
     "DISK ALLOCATED": (.status.allocatable."ephemeral-storage" // "-"),
     "DISK LIMIT": (.status.capacity."ephemeral-storage" // "-"),
     "DISK PRESSURE": ((.status.conditions[] | select(.type=="DiskPressure") | .status) // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  2>/dev/null | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}"  2>/dev/null | column -ts $'\t'
 echo ""
 echo "== SCHEDULED ----------------------------------------------------------------------------"
 echo ""
@@ -67,7 +67,7 @@ jq -r '
     "PREEMPT": ((.status.conditions[] | select(.type=="PreemptScheduled") | .status) // "-"),
     "REDEPLOY": ((.status.conditions[] | select(.type=="RedeployScheduled") | .status) // "-"),
     "FREEZE": ((.status.conditions[] | select(.type=="FreezeScheduled") | .status) // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  2>/dev/null | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}"  2>/dev/null | column -ts $'\t'
 echo ""
 echo "== RESTART ------------------------------------------------------------------------------"
 echo ""
@@ -78,7 +78,7 @@ jq -r '
     "FREQ DDOCKER": ((.status.conditions[] | select(.type=="FrequentDockerRestart") | .status) // "-"),
     "FREQ KUBLET": ((.status.conditions[] | select(.type=="FrequentKubeletRestart") | .status) // "-"),
     "FREQ CONTAINER": ((.status.conditions[] | select(.type=="FrequentContainerdRestart") | .status) // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  2>/dev/null | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}"  2>/dev/null | column -ts $'\t'
 echo ""
 echo "== PROBLEM ------------------------------------------------------------------------------"
 echo ""
@@ -89,7 +89,7 @@ jq -r '
     "KUBELET": ((.status.conditions[] | select(.type=="KubeletProblem") | .status) // "-"),
     "CONTAINER RUNTIME": ((.status.conditions[] | select(.type=="ContainerRuntimeProblem") | .status) // "-"),
     "FS CORRUPTION": ((.status.conditions[] | select(.type=="FilesystemCorruptionProblem") | .status) // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  2>/dev/null | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}"  2>/dev/null | column -ts $'\t'
 echo ""
 echo "== OTHER --------------------------------------------------------------------------------"
 jq -r '
@@ -100,7 +100,7 @@ jq -r '
     "FREQ UNREG NET DEVICES": ((.status.conditions[] | select(.type=="FrequentUnregisterNetDevice") | .status) // "-"),
     "KERNEL DEADLOCK": ((.status.conditions[] | select(.type=="KernelDeadlock") | .status) // "-"),
     "CORRUPT OVERLAY": ((.status.conditions[] | select(.type=="CorruptDockerOverlay2") | .status) // "-"),
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  2>/dev/null | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}"  2>/dev/null | column -ts $'\t'
 echo ""
 
 echo "========================================================================================="
@@ -116,7 +116,7 @@ echo ""
 
 for ((i=0; i<$count; i++))
 do
-  host=`jq -r '.items['$i'].metadata.name' ${1}`
+  host=`jq -r '.items['$i'].metadata.name' "${1}"`
   echo "---------- HOST: ${host} -----------------------------------------------------------------"
   jq -r '
   [.items['$i'].status.images[]
@@ -125,7 +125,7 @@ do
   | {
       "IMAGE NAME": (.names |last // "-"),
       "IMAGE SIZE": (.sizeBytes // "-")
-    }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null  | column -ts $'\t'
+    }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null  | column -ts $'\t'
   echo ""
 done
 echo ""
@@ -142,7 +142,7 @@ jq -r '
     "REGION": (.metadata.labels."topology.kubernetes.io/region" // "-"),
     "INTERNAL IP": ((.status.addresses[] | select(.type=="InternalIP") | .address) // "-"),
     "EXTERNAL IP": ((.status.addresses[] | select(.type=="ExternalIP") | .address) // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  2>/dev/null | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}"  2>/dev/null | column -ts $'\t'
 echo ""
 
 echo "========================================================================================="
@@ -155,7 +155,7 @@ jq -r '["NODE","VOLUME NAME", "DEVICE PATH"],
 | (.status.volumesAttached[]
 | [ $nodename,
 (.name // "-"),
-(.devicePath // "-")])) | join(",")' ${1}  2>/dev/null | column -t -s ","
+(.devicePath // "-")])) | join(",")' "${1}"  2>/dev/null | column -t -s ","
 echo ""
 
 echo "========================================================================================="
@@ -166,7 +166,7 @@ jq -r '["NODE", "VOLUME IN USE"],
 (.items[] 
 | .metadata.name as $nodename 
 | .status.volumesInUse[]? 
-| [$nodename, . ]) | join(",")' ${1}  2>/dev/null | column -t -s ","
+| [$nodename, . ]) | join(",")' "${1}"  2>/dev/null | column -t -s ","
 echo ""
 
 echo "========================================================================================="
@@ -175,9 +175,9 @@ echo "==========================================================================
 echo ""
 for ((i=0; i<$count; i++))
 do
-  host=`jq -r '.items['$i'].metadata.name' ${1}`
+  host=`jq -r '.items['$i'].metadata.name' "${1}"`
   echo "---------- HOST: ${host} -----------------------------------------------------------------"
-  jq -r '.items['${i}'] | .metadata.labels | (to_entries[] | "\(.key)=\(.value)")| select(length >0)' ${1} 2>/dev/null 
+  jq -r '.items['${i}'] | .metadata.labels | (to_entries[] | "\(.key)=\(.value)")| select(length >0)' "${1}" 2>/dev/null 
   echo ""
 done
 echo ""
@@ -188,9 +188,9 @@ echo "==========================================================================
 echo ""
 for ((i=0; i<$count; i++))
 do
-  host=`jq -r '.items['$i'].metadata.name' ${1}`
+  host=`jq -r '.items['$i'].metadata.name' "${1}"`
   echo "---------- HOST: ${host} -----------------------------------------------------------------"
-  jq -r '.items['${i}'].metadata.annotations | (to_entries[] | "\(.key)=\(.value)")| select(length >0)' ${1} 2>/dev/null 
+  jq -r '.items['${i}'].metadata.annotations | (to_entries[] | "\(.key)=\(.value)")| select(length >0)' "${1}" 2>/dev/null 
   echo ""
 done
 echo ""
@@ -201,7 +201,7 @@ echo "==========================================================================
 echo ""
 for ((i=0; i<$count; i++))
 do
-  host=`jq -r '.items['$i'].metadata.name' ${1}`
+  host=`jq -r '.items['$i'].metadata.name' "${1}"`
   echo "---------- HOST: ${host} -----------------------------------------------------------------"
   jq -r '
   [.items['$i'].status.images[]
@@ -209,7 +209,7 @@ do
   | {
       "IMAGE NAME": (.names |last // "-"),
       "IMAGE SIZE": (.sizeBytes // "-")
-    }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  2>/dev/null | column -ts $'\t'
+    }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}"  2>/dev/null | column -ts $'\t'
   echo ""
 done
 echo ""

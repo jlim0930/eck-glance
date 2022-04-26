@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # count of array
-count=`jq '.items | length' ${1}`
+count=`jq '.items | length' "${1}"`
 if [ ${count} = 0 ]; then
  exit
 fi
@@ -33,7 +33,7 @@ def count(stream): reduce stream as $i (0; .+1);
     "LAST STARTTIME": (.status.startTime // "-"),
     "NODE": (.spec.nodeName // "-"),
     "CREATED": (.metadata.creationTimestamp // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t'
 echo ""
 
 echo "========================================================================================="
@@ -51,7 +51,7 @@ jq -r '
     "OWNER": (.metadata.ownerReferences[] | select(.controller==true) |.kind + "/" + .name // "-"),
     "CONTAINERS": ([.spec.containers[].name]|join(",") // "-"),
     "IMAGES": ([.spec.containers[].image]|join(",") // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null  | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null  | column -ts $'\t'
 echo ""
 
 #
@@ -75,7 +75,7 @@ jq -r '
     "QoS Class": (.status.qosClass // "-"),
   }
 ]
-| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  2>/dev/null | column -ts $'\t'
+| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}"  2>/dev/null | column -ts $'\t'
 echo ""
 
 echo "========================================================================================="
@@ -94,7 +94,7 @@ jq -r '
      "SECURITY CONTEXT": ((.spec.securityContext| (to_entries[] | "\(.key)=\(.value)") | select(length >0)) // "-"), 
     "AFFINITY": ((.spec.affinity.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution[].podAffinityTerm.labelSelector.matchLabels|(to_entries[] | "\(.key)=\(.value)"))? // "-"),
     "SERVICE LINKS": (.spec.enableServiceLinks|tostring // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  2>/dev/null  | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}"  2>/dev/null  | column -ts $'\t'
 echo ""
 
 echo "========================================================================================="
@@ -110,7 +110,7 @@ jq -r '
   "OPERATOR": (.operator // "-"),
   "EFFECT": (.effect // "-"),
   "TOLERATION": (.tolerationSeconds // "-")
-})]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  2>/dev/null | column -ts $'\t'
+})]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}"  2>/dev/null | column -ts $'\t'
 
 # FIX - format a bit cleaner
 echo "========================================================================================="
@@ -126,7 +126,7 @@ jq -r '["NAME","VOLUME NAME","CLAIM NAME"],
 (.name // "-"),
 (.persistentVolumeClaim.claimName // "-")]))
 | join(",")
-' ${1}  2>/dev/null | column -t -s ","
+' "${1}"  2>/dev/null | column -t -s ","
 echo ""
 
 echo "Secrets" | sed "s/^/                     /"
@@ -140,7 +140,7 @@ jq -r '["NAME","SECRET","NAME","DEFAULT MODE","OPTIONAL"],
 (.secret.defaultMode|tostring // "-"),
 (.secret.optional|tostring // "-")]))
 | join(",")
-' ${1}  2>/dev/null | column -t -s ","
+' "${1}"  2>/dev/null | column -t -s ","
 echo ""
 
 echo "ConfigMaps" | sed "s/^/                     /"
@@ -154,7 +154,7 @@ jq -r '["NAME","CONFIG MAP","NAME","DEFAULT MODE","OPTIONAL"],
 (.configMap.defaultMode|tostring // "-"),
 (.configMap.optional|tostring // "-")]))
 | join(",")
-' ${1}  2>/dev/null | column -t -s ","
+' "${1}"  2>/dev/null | column -t -s ","
 echo ""
 
 echo "emptyDir" | sed "s/^/                     /"
@@ -165,7 +165,7 @@ jq -r '["NAME","EMPTYDIR NAME"],
 | [ $podname,
 (.name // "-")]))
 | join(",")
-' ${1} 2>/dev/null  | column -t -s ","
+' "${1}" 2>/dev/null  | column -t -s ","
 echo ""
 
 echo "========================================================================================="
@@ -174,14 +174,14 @@ echo "==========================================================================
 echo ""
 for ((i=0; i<$count; i++))
 do
-  pod=`jq -r '.items['${i}'].metadata.name' ${1}`
+  pod=`jq -r '.items['${i}'].metadata.name' "${1}"`
   echo "---------------------------------- Labels POD: ${pod}"
   echo ""
-  jq -r '.items['${i}'].metadata.labels | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null 
+  jq -r '.items['${i}'].metadata.labels | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' "${1}" 2>/dev/null 
   echo ""
   echo "----------------------------- Annotations POD: ${pod}"
   echo ""
-  jq -r '.items['${i}'].metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null 
+  jq -r '.items['${i}'].metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' "${1}" 2>/dev/null 
 done
 
 echo ""
@@ -190,5 +190,5 @@ echo "==========================================================================
 echo "Statefulset managedFields dump"
 echo "========================================================================================="
 echo ""
-jq -r '.items[].metadata.managedFields' ${1} 2>/dev/null
+jq -r '.items[].metadata.managedFields' "${1}" 2>/dev/null
 

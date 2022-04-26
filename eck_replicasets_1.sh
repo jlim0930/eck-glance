@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # count of array 
-count=`jq '.items | length' ${1}`
+count=`jq '.items | length' "${1}"`
 if [ ${count} = 0 ]; then
  exit
 fi
@@ -20,7 +20,7 @@ jq -r '
     "CURRENT": (.status.availableReplicas // "-"),
     "READY": (.status.readyReplicas // "-"),
     "CREATION TIME": (.metadata.creationTimestamp // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t'
 echo ""
 
 echo "========================================================================================="
@@ -36,7 +36,7 @@ jq -r '
     "OWNER": (.metadata.ownerReferences[] | select(.controller==true) |.kind + "/" + .name // "-"),
     "CONTAINERS": ([.spec.template.spec.containers[].name]|join(",") // "-"),
     "IMAGES": ([.spec.template.spec.containers[].image]|join(",") // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t'
 echo ""
 
 
@@ -51,7 +51,7 @@ jq -r '
     "Name": (.metadata.name // "-"),
     "Replicas": (.spec.replicas // "-"),
     "Selector": ([(.spec.selector.matchLabels)| (to_entries[] | "\(.key)=\(.value)")] | join(",") // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1} 2>/dev/null | column -ts $'\t'
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t'
 echo ""
 
 echo "========================================================================================="
@@ -61,14 +61,14 @@ echo ""
 
 for ((i=0; i<$count; i++))
 do
-  ss=`jq -r '.items['${i}'].metadata.name' ${1}`
+  ss=`jq -r '.items['${i}'].metadata.name' "${1}"`
   echo "---------------------------------- Labels DaemonSet: ${ss}"
   echo ""
-  jq -r '.items['${i}'].metadata.labels | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null 
+  jq -r '.items['${i}'].metadata.labels | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' "${1}" 2>/dev/null 
   echo ""
   echo "----------------------------- Annotations DaemonSet: ${ss}"
   echo ""
-  jq -r '.items['${i}'].metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' ${1} 2>/dev/null 
+  jq -r '.items['${i}'].metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' "${1}" 2>/dev/null 
 done
 
 echo ""
@@ -77,5 +77,5 @@ echo "==========================================================================
 echo "ReplicaSet managedFields dump"
 echo "========================================================================================="
 echo ""
-jq -r '.items[].metadata.managedFields' ${1} 2>/dev/null
+jq -r '.items[].metadata.managedFields' "${1}" 2>/dev/null
 
