@@ -28,6 +28,8 @@ jq -r '
     "OS": (.status.nodeInfo.operatingSystem // "-"),
     "OS image": (.status.nodeInfo.osImage // "-"),
     "KERNEL": (.status.nodeInfo.kernelVersion // "-"),
+    "REGION": (.metadata.labels."topology.kubernetes.io/region" // "-"),
+    "ZONE": (.metadata.labels."topology.kubernetes.io/zone" // "-"),
     "kubelet Version": (.status.nodeInfo.kubeletVersion // "-"),
     "Runtime Version": (.status.nodeInfo.containerRuntimeVersion // "-")
   }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' ${1}  2>/dev/null | column -ts $'\t'
