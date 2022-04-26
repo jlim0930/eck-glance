@@ -31,6 +31,21 @@ echo ""
 echo ""
 
 echo "========================================================================================="
+echo "ELASTICSEARCH Resources per nodeSet"
+echo "========================================================================================="
+echo ""
+jq -r '["DEPLOYMENT", "NODESET", "ROLES", "COUNT", "CPU REQUEST", "CPU LIMIT", "MEM REQUEST", "MEM LIMIT"],
+(.items
+| sort_by(.metadata.name)[]
+| .metadata.name as $deployment
+| .spec.nodeSets
+| sort_by(.name)[]
+| [$deployment, .name, .config."node.roles", .count, (.podTemplate.spec.containers[] | select (.name=="elasticsearch") |.resources.requests.cpu), (.podTemplate.spec.containers[] | select (.name=="elasticsearch") |.resources.limits.cpu), (.podTemplate.spec.containers[] | select (.name=="elasticsearch") |.resources.requests.memory), (.podTemplate.spec.containers[] | select (.name=="elasticsearch") |.resources.limits.memory)]
+) | join ("|")' "${1}" 2>/dev/null| column -t -s "|"
+echo ""
+echo ""
+
+echo "========================================================================================="
 echo "ELASTICSEARCH Status & Referneces"
 echo "========================================================================================="
 echo ""
