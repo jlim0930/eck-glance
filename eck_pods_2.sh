@@ -168,6 +168,20 @@ if [ ${count} -gt 0 ] || [ -z ${count} ]; then
   echo "POD: ${2} InitContainers"
   echo "========================================================================================="
   echo ""
+
+  jq -r '
+  [.items[]
+  | select(.metadata.name=="'${2}'").status.initContainerStatuses[]
+  | {
+      "NAME": (.name // "-"),
+      "STATE": (.state|to_entries[].key // "-"),
+      "REASON": (.state[].reason // "-"),
+      "EXITCODE": (.state[].exitCode // "-"),
+      "START": (.state[].startedAt // "-"),
+      "FINISHED": (.state[].finishedAt // "-"),
+      "MESSAGE": (.state[].message // "-")
+    } ] | (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t'
+
   for ((i=0; i<$count; i++))
   do
   initcontainername=`jq -r '.items[] | select(.metadata.name=="'${2}'").spec.initContainers['${i}'].name' "${1}"`
@@ -268,6 +282,20 @@ if [ ${count} -gt 0 ] || [ -z ${count} ]; then
   echo "POD: ${2} Containers"
   echo "========================================================================================="
   echo ""
+
+    jq -r '
+  [.items[]
+  | select(.metadata.name=="'${2}'").status.containerStatuses[]
+  | {
+      "NAME": (.name // "-"),
+      "STATE": (.state|to_entries[].key // "-"),
+      "REASON": (.state[].reason // "-"),
+      "EXITCODE": (.state[].exitCode // "-"),
+      "START": (.state[].startedAt // "-"),
+      "FINISHED": (.state[].finishedAt // "-"),
+      "MESSAGE": (.state[].message // "-")
+    } ] | (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t'
+
   for ((i=0; i<$count; i++))
   do
   containername=`jq -r '.items[] | select(.metadata.name=="'${2}'").spec.containers['${i}'].name' "${1}"`
