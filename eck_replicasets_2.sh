@@ -38,6 +38,13 @@ value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | ((.status.readyRepl
 printf "%-20s %s\\n" "Replicas:" "${value}"
 echo ""
 
+# affinity
+# FIX - might need fix if object doesnt exist - fixed need to test
+#value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | ((.spec.template.spec.affinity.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution[].podAffinityTerm.labelSelector.matchLabels|(to_entries[] | "\(.key)=\(.value)"))? // "-")' "${1}" 2>/dev/null)
+#printf "%-20s %s\\n" "Affinity:" "${value}"
+printf "%-20s \n" "Affinity:"
+jq -r '.items[] | select(.metadata.name=="'${2}'").spec.template.spec.affinity' "${1}" 2>/dev/null | sed "s/^/                     /"
+
 # apiVersion
 value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.metadata.ownerReferences[] | select(.controller==true) |.apiVersion/ // "-")' "${1}" 2>/dev/null)
 printf "%-20s %s\\n" "apiVersion:" "${value}"

@@ -7,6 +7,14 @@ if [ ${count} = 0 ]; then
 fi
 
 echo "========================================================================================="
+echo "ITEMS TO NOTES:"
+echo " - Look at the DESIRED, CURRENT, READY and focus from there"
+echo " - Look at individual replicaset for Affinities to troubleshoot if replicas are having issues scheduleing"
+echo "========================================================================================="
+echo ""
+echo ""
+
+echo "========================================================================================="
 echo "ReplicaSet Summary - for details pleast look at rs_details-*.txt"
 echo "========================================================================================="
 echo ""

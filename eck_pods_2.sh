@@ -5,6 +5,7 @@ echo "==========================================================================
 echo "ITEMS TO NOTES:"
 echo " - Volume Claims template must be named elasticsearch-data or else you can have data loss"
 echo " - Don’t use emptyDir as data volume claims - it might generate permanent data loss."
+echo " - Look at container and initContainer list to see which container/initContainer is having issues to keep the pod from starting correctly"
 echo "========================================================================================="
 echo ""
 echo ""
@@ -181,6 +182,10 @@ if [ ${count} -gt 0 ] || [ -z ${count} ]; then
       "FINISHED": (.state[].finishedAt // "-"),
       "MESSAGE": (.state[].message // "-")
     } ] | (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t'
+  
+  echo ""
+  echo "----------------------------------------------------------------------------------------------------------"
+  echo ""
 
   for ((i=0; i<$count; i++))
   do
@@ -295,6 +300,10 @@ if [ ${count} -gt 0 ] || [ -z ${count} ]; then
       "FINISHED": (.state[].finishedAt // "-"),
       "MESSAGE": (.state[].message // "-")
     } ] | (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t'
+  
+  echo ""
+  echo "----------------------------------------------------------------------------------------------------------"
+  echo ""
 
   for ((i=0; i<$count; i++))
   do

@@ -30,24 +30,9 @@ jq -r '
     "ACCESS MODES": (.spec.accessModes[0] // "-"),
     "STORAGECLASS": (.spec.storageClassName // "-"),
     "VOLUME MODE": (.spec.volumeMode // "-"),
-    "CREATION TIME": (.metadata.creationTimestamp // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}"  2>/dev/null  | column -ts $'\t'
-echo ""
-echo ""
-
-
-echo "========================================================================================="
-echo "PersistentVolumeClaims Owner"
-echo "========================================================================================="
-echo ""
-
-jq -r '
-[.items
-| sort_by(.metdata.name)[]
-| {
-    "NAME": (.metadata.name // "-"),
     "APIVERSION": (select(.metadata.ownerReferences != null) |.metadata.ownerReferences[] | select(.name !=null) | ((.apiVersion) // "-")),
-    "OWNER": (select(.metadata.ownerReferences != null) |.metadata.ownerReferences[] | select(.name !=null) | ((.name) // "-"))
+    "OWNER": (select(.metadata.ownerReferences != null) |.metadata.ownerReferences[] | select(.name !=null) | ((.name) // "-")),
+    "CREATION TIME": (.metadata.creationTimestamp // "-")
   }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}"  2>/dev/null  | column -ts $'\t'
 echo ""
 echo ""

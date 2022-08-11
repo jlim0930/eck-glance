@@ -10,6 +10,8 @@ echo "==========================================================================
 echo "ITEMS TO NOTES:"
 echo " - Volume Claims template must be named elasticsearch-data or else you can have data loss"
 echo " - Don’t use emptyDir as data volume claims - it might generate permanent data loss."
+echo " - Look at the READY to see is all are ready - if not then focus on that pod"
+echo " - Look at individual pod for Affinities to troubleshoot if pod are having issues scheduleing"
 echo "========================================================================================="
 echo ""
 echo ""

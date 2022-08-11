@@ -7,6 +7,14 @@ if [ ${count} = 0 ]; then
 fi
 
 echo "========================================================================================="
+echo "ITEMS TO NOTES:"
+echo " - Look at the READY to see is all are ready - if not then focus on that statefulset"
+echo " - Look at individual statefulset for Affinities to troubleshoot if statefulsets are having issues scheduleing"
+echo "========================================================================================="
+echo ""
+echo ""
+
+echo "========================================================================================="
 echo "StatefulSet Summary - for details pleast look at eck_statefulset-<name>.txt"
 echo "========================================================================================="
 echo ""

@@ -49,7 +49,7 @@ do
     eslist=`jq -r '.items[].metadata.name' "${WORKDIR}/${namespace}/elasticsearch.json"`
     for es in ${eslist}
     do
-      echo "  |---- [DEBUG] Parsing elasticsearch.json for ${es}"
+      echo "    |---- [DEBUG] Parsing elasticsearch.json for ${es}"
       ${SCRIPTDIR}/eck_elasticsearch_2.sh "${WORKDIR}/${namespace}/elasticsearch.json" "${es}" > "${WORKDIR}/${namespace}/eck_elasticsearch-${es}.txt"    
     done
   fi
@@ -62,7 +62,7 @@ do
     kibanalist=`jq -r '.items[].metadata.name' "${WORKDIR}/${namespace}/kibana.json"`
     for kibana in ${kibanalist}
     do
-      echo "  |---- [DEBUG] Parsing kibana.json for ${kibana}"
+      echo "    |---- [DEBUG] Parsing kibana.json for ${kibana}"
       ${SCRIPTDIR}/eck_kibana_2.sh "${WORKDIR}/${namespace}/kibana.json" "${kibana}" > "${WORKDIR}/${namespace}/eck_kibana-${kibana}.txt"    
     done
   fi
@@ -75,7 +75,7 @@ do
     beatlist=`jq -r '.items[].metadata.name' "${WORKDIR}/${namespace}/beat.json"`
     for beat in ${beatlist}
     do
-      echo "  |---- [DEBUG] Parsing beat.json for ${beat}"
+      echo "    |---- [DEBUG] Parsing beat.json for ${beat}"
       ${SCRIPTDIR}/eck_beat_2.sh "${WORKDIR}/${namespace}/beat.json" "${beat}" > "${WORKDIR}/${namespace}/eck_beat-${beat}.txt"    
     done
   fi
@@ -88,7 +88,7 @@ do
     agentlist=`jq -r '.items[].metadata.name' "${WORKDIR}/${namespace}/agent.json"`
     for agent in ${agentlist}
     do
-      echo "  |---- [DEBUG] Parsing agent.json.json for ${agent}"
+      echo "    |---- [DEBUG] Parsing agent.json.json for ${agent}"
       ${SCRIPTDIR}/eck_agent_2.sh "${WORKDIR}/${namespace}/agent.json" "${agent}" > "${WORKDIR}/${namespace}/eck_agent-${agent}.txt"    
     done
   fi
@@ -101,7 +101,7 @@ do
     apmlist=`jq -r '.items[].metadata.name' "${WORKDIR}/${namespace}/apmserver.json"`
     for apm in ${apmlist}
     do
-      echo "  |---- [DEBUG] Parsing apmserver.json for ${apm}"
+      echo "    |---- [DEBUG] Parsing apmserver.json for ${apm}"
       ${SCRIPTDIR}/eck_apmserver_2.sh "${WORKDIR}/${namespace}/apmserver.json" "${apm}" > "${WORKDIR}/${namespace}/eck_apmserver-${apm}.txt"    
     done
   fi
@@ -114,7 +114,7 @@ do
     entsearchlist=`jq -r '.items[].metadata.name' "${WORKDIR}/${namespace}/enterprisesearch.json"`
     for entsearch in ${entsearchlist}
     do
-      echo "  |---- [DEBUG] Parsing enterprisesearch.json for ${entsearch}"
+      echo "    |---- [DEBUG] Parsing enterprisesearch.json for ${entsearch}"
       ${SCRIPTDIR}/eck_enterprisesearch_2.sh "${WORKDIR}/${namespace}/enterprisesearch.json" "${entsearch}" > "${WORKDIR}/${namespace}/eck_enterprisesearch-${entsearch}.txt"    
     done
   fi
@@ -127,7 +127,7 @@ do
     esmaplist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/elasticmapsserver.json`
     for esmap in ${esmaplist}
     do
-      echo "  |---- [DEBUG] Parsing elasticmapsserver.json for ${elasticmapsserver}"
+      echo "    |---- [DEBUG] Parsing elasticmapsserver.json for ${elasticmapsserver}"
       ${SCRIPTDIR}/eck_elasticmapsserver_2.sh "${WORKDIR}/${namespace}/elasticmapsserver.json" "${esmap}" > "${WORKDIR}/${namespace}/eck_elasticmapsserver-${esmap}.txt"    
     done
   fi
@@ -144,7 +144,7 @@ do
     dslist=`jq -r '.items[].metadata.name' "${WORKDIR}/${namespace}/daemonsets.json"`
     for ds in ${dslist}
     do
-      echo "  |---- [DEBUG] Parsing daemonsets.json for ${ds}"
+      echo "    |---- [DEBUG] Parsing daemonsets.json for ${ds}"
       ${SCRIPTDIR}/eck_daemonsets_2.sh "${WORKDIR}/${namespace}/daemonsets.json" "${ds}" > "${WORKDIR}/${namespace}/eck_daemonset-${ds}.txt"    
     done
   fi
@@ -158,7 +158,7 @@ do
     sslist=`jq -r '.items[].metadata.name' "${WORKDIR}/${namespace}/statefulsets.json"`
     for ss in ${sslist}
     do
-      echo "  |---- [DEBUG] Parsing statefulsets.json for ${ss}"
+      echo "    |---- [DEBUG] Parsing statefulsets.json for ${ss}"
       ${SCRIPTDIR}/eck_statefulsets_2.sh "${WORKDIR}/${namespace}/statefulsets.json" "${ss}" > "${WORKDIR}/${namespace}/eck_statefulset-${ss}.txt"    
     done
   fi
@@ -172,7 +172,7 @@ do
     rslist=`jq -r '.items[].metadata.name' "${WORKDIR}/${namespace}/replicasets.json"`
     for rs in ${rslist}
     do
-      echo "  |---- [DEBUG] Parsing replicasets.json for ${rs}"
+      echo "    |---- [DEBUG] Parsing replicasets.json for ${rs}"
       ${SCRIPTDIR}/eck_replicasets_2.sh "${WORKDIR}/${namespace}/replicasets.json" "${rs}" > "${WORKDIR}/${namespace}/eck_replicaset-${rs}.txt"    
     done
   fi
@@ -186,7 +186,7 @@ do
     podlist=`jq -r '.items[].metadata.name' "${WORKDIR}/${namespace}/pods.json"`
     for pod in ${podlist}
     do
-      echo "  |---- [DEBUG] Parsing pods.json for ${pod}"
+      echo "    |---- [DEBUG] Parsing pods.json for ${pod}"
       ${SCRIPTDIR}/eck_pods_2.sh "${WORKDIR}/${namespace}/pods.json" "${pod}" > "${WORKDIR}/${namespace}/eck_pod-${pod}.txt"    
     done
   fi
@@ -200,7 +200,7 @@ do
     crlist=`jq -r '.items[].metadata.name' "${WORKDIR}/${namespace}/controllerrevisions.json"`
     for cr in ${crlist}
     do
-      echo "  |---- [DEBUG] Parsing controllerrevisions.json for ${cr}"
+      echo "    |---- [DEBUG] Parsing controllerrevisions.json for ${cr}"
       ${SCRIPTDIR}/eck_controllerrevisions_2.sh "${WORKDIR}/${namespace}/controllerrevisions.json" "${cr}" > "${WORKDIR}/${namespace}/eck_controllerrevision-${cr}.txt"    
     done
   fi
@@ -221,7 +221,7 @@ do
     deployments=`jq -r '.items[].metadata.name' "${WORKDIR}/${namespace}/deployments.json"`
     for deployment in ${deployments}
     do
-      echo "  |---- [DEBUG] Parsing deployments.json for ${deployment}"
+      echo "    |---- [DEBUG] Parsing deployments.json for ${deployment}"
       export deployment
       ${SCRIPTDIR}/eck_deployments_2.sh "${WORKDIR}/${namespace}/deployments.json" "${deployment}" > "${WORKDIR}/${namespace}/eck_deployment-${deployment}.txt"    
       unset deployment

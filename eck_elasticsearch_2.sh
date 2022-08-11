@@ -57,8 +57,59 @@ echo "==========================================================================
 echo "${2} CONFIG DUMP"
 echo "========================================================================================="
 echo ""
-jq -r '.items[]| select(.metadata.name=="'${2}'").spec | keys[] as $k | "\n-- CONFIG: \($k) ================================",.[$k]' "${1}" 2>/dev/null
+# old way
+# jq -r '.items[]| select(.metadata.name=="'${2}'").spec | keys[] as $k | "\n-- CONFIG: \($k) ================================",.[$k]' "${1}" 2>/dev/null
+# echo ""
 
+# seperate parts and parse out nodeSets
+# auth
+echo "-- CONFIG: auth ================================"
+jq -r '.items[]| select(.metadata.name=="'${2}'").spec.auth' "${1}" 2>/dev/null
+echo ""
+# http
+echo "-- CONFIG: http ================================"
+jq -r '.items[]| select(.metadata.name=="'${2}'").spec.http' "${1}" 2>/dev/null
+echo ""
+# monitoring
+echo "-- CONFIG: monitoring ================================"
+jq -r '.items[]| select(.metadata.name=="'${2}'").spec.monitoring' "${1}" 2>/dev/null
+echo ""
+# nodeSets
+echo "-- CONFIG: nodeSets ================================"
+echo ""
+jq -r '
+[.items[]
+| select(.metadata.name=="'${2}'")|.spec.nodeSets[]
+| {
+    "NODESET": (.name),
+    "COUNT": (.count),
+    "ROLES": (.config."node.roles")
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null   | column -ts $'\t'
+echo ""
+
+jq -r '["NODESET","VolumeClaim","AccessMode","SIZE","StorageClass"],
+(.items[] | select(.metadata.name=="'${2}'")|.spec.nodeSets[]
+| .name as $nodesetname
+| (.volumeClaimTemplates[]
+| [ $nodesetname, (.metadata.name // "-"), (.spec.accessModes[] // "-"), (.spec.resources.requests.storage // "-"), (.spec.storageClassName // "-")])) | join(",")' "${1}"  2>/dev/null | column -t -s ","
+echo ""
+
+echo "need to add more data here... "
+echo ""
+
+# secureSettings
+echo "-- CONFIG: secureSettings ================================"
+jq -r '.items[]| select(.metadata.name=="'${2}'").spec.secureSettings' "${1}" 2>/dev/null
+echo ""
+# transport
+echo "-- CONFIG: transport ================================"
+jq -r '.items[]| select(.metadata.name=="'${2}'").spec.transport' "${1}" 2>/dev/null
+echo ""
+# updateStrategy
+echo "-- CONFIG: updateStrategy ================================"
+jq -r '.items[]| select(.metadata.name=="'${2}'").spec.updateStrategy' "${1}" 2>/dev/null
+echo ""
+# version
 
 echo ""
 echo ""

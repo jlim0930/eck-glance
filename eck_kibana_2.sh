@@ -20,6 +20,11 @@ jq -r '.items[] | select(.metadata.name=="'${2}'").metadata.labels | (to_entries
 printf "%-20s \n" "Annotations:"
 jq -r '.items[] | select(.metadata.name=="'${2}'").metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' "${1}" 2>/dev/null | sed "s/^/                     /"
 
+# FIX - need to format better
+# affinity node selector
+printf "%-20s \n" "Affinity:"
+jq -r '.items[] | select(.metadata.name=="'${2}'").spec.podTemplate.spec.affinity' "${1}" 2>/dev/null | sed "s/^/                     /"
+
 # apiVersion
 value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.apiVersion // "-")' "${1}" 2>/dev/null)
 printf "%-20s %s\\n" "apiVersion:" "${value}"
