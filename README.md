@@ -45,3 +45,4 @@ After the `eck-glance` runs I would start looking at eck_events.txt from the `<n
 * Find ways to remove loops
 * Find ways to make current jq queries more simple and account for various nulls
 * 
+*
