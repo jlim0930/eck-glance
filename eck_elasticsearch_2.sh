@@ -76,6 +76,7 @@ jq -r '.items[]| select(.metadata.name=="'${2}'").spec.monitoring' "${1}" 2>/dev
 echo ""
 # nodeSets
 echo "-- CONFIG: nodeSets ================================"
+echo "If ROLES are empty it means that the nodes have ALL roles assigned"
 echo ""
 jq -r '
 [.items[]
