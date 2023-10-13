@@ -83,7 +83,7 @@ jq -r '
 | {
     "NODESET": (.name),
     "COUNT": (.count),
-    "ROLES": (.config."node.roles")
+    "ROLES": (.config |."node.roles" // [] | join(","))
   }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null   | column -ts $'\t'
 echo ""
 
