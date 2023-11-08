@@ -22,14 +22,6 @@ printf "%-20s %s\\n" "Owner Reference:" "${value}"
 value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.metadata.ownerReferences[] | select(.controller==true) |.apiVersion|tostring // "-")' "${1}" 2>/dev/null)
 printf "%-20s %s\\n" "apiVersion:" "${value}"
 
-# labels
-printf "%-20s \n" "Labels:"
-jq -r '.items[] | select(.metadata.name=="'${2}'").metadata.labels | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' "${1}" 2>/dev/null | sed "s/^/                     /"
-
-# annotations
-printf "%-20s \n" "Annotations:"
-jq -r '.items[] | select(.metadata.name=="'${2}'").metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' "${1}" 2>/dev/null | sed "s/^/                     /"
-  
 # events
 if [ -f eck_events.txt ]; then
   echo ""
@@ -54,10 +46,11 @@ printf "%-20s \n" "  Annotations:"
 jq -r '.items[] | select(.metadata.name=="'${2}'").data.spec.template.metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' "${1}" 2>/dev/null | sed "s/^/                     /"
 echo ""
 
+# CONFIGS
 echo ""
 echo ""
 echo "========================================================================================="
-echo "${2} DATA dump"
+echo "${2} CONFIG DUMP"
 echo "========================================================================================="
 echo ""
-jq -r '.items[].data' "${1}" 2>/dev/null
+jq -r '.items[]| select(.metadata.name=="'${2}'").data.spec.template.spec | keys[] as $k | "\n-- CONFIG: \($k) ================================",.[$k]' "${1}" 2>/dev/null

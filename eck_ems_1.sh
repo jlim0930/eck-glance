@@ -6,7 +6,6 @@ if [ ${count} = 0 ]; then
  exit
 fi
 
-# Summary
 echo "========================================================================================="
 echo "Summary"
 echo "========================================================================================="
@@ -19,17 +18,17 @@ jq -r '
     "NAMESPACE": (.metadata.namespace // "-"),
     "HEALTH": (.status.health // "-"),
     "AVAILABLE": (.status.availableNodes|tostring // "-"),
-    "EXPECTED": (.status.count|tostring // "-"),
-    "KIND": (.kind // "-"),
+    "EXPECTED": (.status.expectedNodes|tostring // "-"),
+    "TYPE": (.spec.type // "-"),
     "VERSION": (.status.version // "-"),
     "GENERATION": (.metadata.generation // "-"),
+    "KIND": (.kind // "-"),
     "APIVERSION": (.apiVersion // "-"),
     "CREATION TIME": (.metadata.creationTimestamp // "-")
   }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}"  2>/dev/null | column -ts $'\t'
 echo ""
 echo ""
 
-# Status & References
 echo "========================================================================================="
 echo "Status & Referneces"
 echo "========================================================================================="
@@ -41,16 +40,14 @@ jq -r '
     "NAME": (.metadata.name // "-"),
     "SERVICE": (.status.service // "-"),
     "SECRET TOKEN": (.status.secretTokenSecret // "-"),
-    "ES REF": (.spec.elasticsearchRef.name // "-"),
-    "ES ASSOCIATION": (.status.elasticsearchAssociationStatus // "-"),
+    "ES REF": ((.status | select(.elasticsearchAssociationsStatus != null)| .elasticsearchAssociationsStatus| to_entries[] | "\(.key)") // "-"),
+    "ES ASSOCIATION": ((.status | select(.elasticsearchAssociationsStatus != null)| .elasticsearchAssociationsStatus| to_entries[] | "\(.value)") // "-"),
     "KB REF": (.spec.kibanaRef.name // "-"),
     "KB ASSOCIATION": (.status.kibanaAssociationStatus // "-"),
     "SELECTOR": (.status.selector // "-")
   }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}"  2>/dev/null | column -ts $'\t'
-
 echo ""
 
-# Annotations & Labels
 echo "========================================================================================="
 echo "Annotations & Labels"
 echo "========================================================================================="

@@ -53,7 +53,8 @@ jq -r '
     "MEM PRESSURE": ((.status.conditions[] | select(.type=="MemoryPressure") | .status) // "-"),
     "DISK ALLOCATED": (.status.allocatable."ephemeral-storage" // "-"),
     "DISK LIMIT": (.status.capacity."ephemeral-storage" // "-"),
-    "DISK PRESSURE": ((.status.conditions[] | select(.type=="DiskPressure") | .status) // "-")
+    "DISK PRESSURE": ((.status.conditions[] | select(.type=="DiskPressure") | .status) // "-"),
+    "POD LIMIT": (.status.capacity.pods // "-")
   }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}"  2>/dev/null | column -ts $'\t'
 echo ""
 echo "== SCHEDULED ----------------------------------------------------------------------------"
@@ -117,7 +118,7 @@ echo ""
 for ((i=0; i<$count; i++))
 do
   host=`jq -r '.items['$i'].metadata.name' "${1}"`
-  echo "---------- HOST: ${host} -----------------------------------------------------------------"
+  echo "---------- WORKER NODE: ${host} -----------------------------------------------------------------"
   jq -r '
   [.items['$i'].status.images[]
   | select(.names[] 
@@ -170,28 +171,22 @@ jq -r '["NODE", "VOLUME IN USE"],
 echo ""
 
 echo "========================================================================================="
-echo "WORKER NODE Labels"
+echo "WORKER NODE Annotations & Labels"
 echo "========================================================================================="
-echo ""
-for ((i=0; i<$count; i++))
-do
-  host=`jq -r '.items['$i'].metadata.name' "${1}"`
-  echo "---------- HOST: ${host} -----------------------------------------------------------------"
-  jq -r '.items['${i}'] | .metadata.labels | (to_entries[] | "\(.key)=\(.value)")| select(length >0)' "${1}" 2>/dev/null 
-  echo ""
-done
 echo ""
 
-echo "========================================================================================="
-echo "WORKER NODE Annotations"
-echo "========================================================================================="
-echo ""
 for ((i=0; i<$count; i++))
 do
-  host=`jq -r '.items['$i'].metadata.name' "${1}"`
-  echo "---------- HOST: ${host} -----------------------------------------------------------------"
-  jq -r '.items['${i}'].metadata.annotations | (to_entries[] | "\(.key)=\(.value)")| select(length >0)' "${1}" 2>/dev/null 
+  host=`jq -r '.items['${i}'].metadata.name' "${1}"`
+  echo "---------- WORKER NODE: ${host} -----------------------------------------------------------------"
+  echo "Annotations:"
   echo ""
+  jq -r '.items['${i}'].metadata.annotations | to_entries | .[] | .key,(.value | if try fromjson catch false then fromjson else . end),"     "' "${1}" 2>/dev/null
+  echo ""
+  echo "Labels:"
+  echo ""
+  jq -r '.items['${i}'].metadata.labels | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' "${1}" 2>/dev/null
+  echo "" 
 done
 echo ""
 
@@ -202,7 +197,7 @@ echo ""
 for ((i=0; i<$count; i++))
 do
   host=`jq -r '.items['$i'].metadata.name' "${1}"`
-  echo "---------- HOST: ${host} -----------------------------------------------------------------"
+  echo "---------- WORKER NODE: ${host} -----------------------------------------------------------------"
   jq -r '
   [.items['$i'].status.images[]
   | select(.names[])

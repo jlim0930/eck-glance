@@ -17,12 +17,9 @@ echo ""
 echo ""
 
 echo "========================================================================================="
-echo "POD Summary - for details please look at eck_pod-<name>.txt"
+echo "Summary"
 echo "========================================================================================="
 echo ""
-# FIX - # would be good to make status look better
-# FIX - containerStatuses[] is array need to iterate or find total
-# GOOD EXAMPLE WITH COUNT
 jq -r '
 def count(stream): reduce stream as $i (0; .+1);
 [.items
@@ -39,7 +36,7 @@ def count(stream): reduce stream as $i (0; .+1);
 echo ""
 
 echo "========================================================================================="
-echo "POD Summary - wide with more details"
+echo "Summary - wide with more details"
 echo "========================================================================================="
 echo ""
 jq -r '
@@ -60,7 +57,7 @@ echo ""
 
 # STATUS TABLE
 echo "========================================================================================="
-echo "POD Status"
+echo "Status"
 echo "========================================================================================="
 echo ""
 
@@ -81,7 +78,7 @@ jq -r '
 echo ""
 
 echo "========================================================================================="
-echo "POD SPEC"
+echo "SPEC"
 echo "========================================================================================="
 echo ""
 jq -r '
@@ -100,7 +97,7 @@ jq -r '
 echo ""
 
 echo "========================================================================================="
-echo "POD Tolerations"
+echo "Tolerations"
 echo "========================================================================================="
 echo ""
 # FIX - format a bit better
@@ -113,13 +110,14 @@ jq -r '
   "EFFECT": (.effect // "-"),
   "TOLERATION": (.tolerationSeconds // "-")
 })]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}"  2>/dev/null | column -ts $'\t'
+echo ""
 
 # FIX - format a bit cleaner
 echo "========================================================================================="
-echo "POD Volumes"
+echo "Volumes"
 echo "========================================================================================="
 echo ""
-echo "Persistent Volume Claims" | sed "s/^/                     /"
+echo "== PVC"
 jq -r '["NAME","VOLUME NAME","CLAIM NAME"],
 (.items[] | .metadata.name as $podname 
 | (.spec.volumes[]
@@ -131,7 +129,7 @@ jq -r '["NAME","VOLUME NAME","CLAIM NAME"],
 ' "${1}"  2>/dev/null | column -t -s ","
 echo ""
 
-echo "Secrets" | sed "s/^/                     /"
+echo "== Secrets"
 jq -r '["NAME","SECRET","NAME","DEFAULT MODE","OPTIONAL"],
 (.items[] | .metadata.name as $podname 
 | (.spec.volumes[]
@@ -145,7 +143,7 @@ jq -r '["NAME","SECRET","NAME","DEFAULT MODE","OPTIONAL"],
 ' "${1}"  2>/dev/null | column -t -s ","
 echo ""
 
-echo "ConfigMaps" | sed "s/^/                     /"
+echo "== ConfigMaps"
 jq -r '["NAME","CONFIG MAP","NAME","DEFAULT MODE","OPTIONAL"],
 (.items[] | .metadata.name as $podname 
 | (.spec.volumes[]
@@ -159,7 +157,7 @@ jq -r '["NAME","CONFIG MAP","NAME","DEFAULT MODE","OPTIONAL"],
 ' "${1}"  2>/dev/null | column -t -s ","
 echo ""
 
-echo "emptyDir" | sed "s/^/                     /"
+echo "== emptyDir"
 jq -r '["NAME","EMPTYDIR NAME"],
 (.items[] | .metadata.name as $podname 
 | (.spec.volumes[]
@@ -171,26 +169,20 @@ jq -r '["NAME","EMPTYDIR NAME"],
 echo ""
 
 echo "========================================================================================="
-echo "POD Labels & Annotations"
+echo "Labels & Annotations"
 echo "========================================================================================="
 echo ""
 for ((i=0; i<$count; i++))
 do
-  pod=`jq -r '.items['${i}'].metadata.name' "${1}"`
-  echo "---------------------------------- Labels POD: ${pod}"
+  item=`jq -r '.items['${i}'].metadata.name' "${1}"`
+  echo "==== ${item} ----------------------------------------------------------------------------"
   echo ""
+  echo "== Annotations:"
+  #jq -r '.items['${i}'].metadata.annotations | to_entries | .[] | "* \(.key)",(.value | if try fromjson catch false then fromjson else . end),"    "' "${1}" 2>/dev/null
+  jq -r '.items['${i}'].metadata.annotations | (to_entries[] | "\(.key)=\(.value)")' "${1}" 2>/dev/null 
+  echo ""
+  echo "== Labels:"
   jq -r '.items['${i}'].metadata.labels | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' "${1}" 2>/dev/null 
-  echo ""
-  echo "----------------------------- Annotations POD: ${pod}"
-  echo ""
-  jq -r '.items['${i}'].metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' "${1}" 2>/dev/null 
+  echo "" 
 done
-
-echo ""
-echo ""
-echo "========================================================================================="
-echo "Statefulset managedFields dump"
-echo "========================================================================================="
-echo ""
-jq -r '.items[].metadata.managedFields' "${1}" 2>/dev/null
 

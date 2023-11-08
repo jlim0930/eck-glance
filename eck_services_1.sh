@@ -7,7 +7,7 @@ if [ ${count} = 0 ]; then
 fi
 
 echo "========================================================================================="
-echo "Services Summary"
+echo "Summary"
 echo "========================================================================================="
 echo ""
 jq -r '
@@ -15,49 +15,24 @@ jq -r '
 | sort_by(.metdata.name)[]
 | {
     "NAME": (.metadata.name // "-"),
-    "TYPE": (.spec.type // "-"),
     "CLUSTER-IP": (.spec.clusterIP // "-"),
     "EXTERNAL-IP": (.status.loadBalancer.ingress[0].ip // "-"),
+    "TYPE": (.spec.type // "-"),
     "PORTS": (.spec.ports[]| .name + ":" + (.port|tostring) + "/" + .protocol // "-"),
+    "SESSION AFFINITY": (.spec.sessionAffinity // "-"),
+    "IP POLICY": (.spec.ipFamilyPolicy // "-"),
+    "EXT TRAFFIC POLICY": (.spec.externalTrafficPolicy // "-"),
+    "OWNER": (select(.metadata.ownerReferences != null) |.metadata.ownerReferences[] | select(.name !=null) | ((.kind + "/" + .name) // "-")),
+    "APIVERSION": (select(.metadata.ownerReferences != null) |.metadata.ownerReferences[] | select(.name !=null) | ((.apiVersion) // "-")),
     "CREATION TIME": (.metadata.creationTimestamp // "-")
   }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null| column -ts $'\t'
-echo ""
-
-echo "========================================================================================="
-echo "Services Owner"
-echo "========================================================================================="
-echo ""
-jq -r '
-[.items
-| sort_by(.metdata.name)[]
-| {
-    "NAME": (.metadata.name // "-"),
-    "APIVERSION": (select(.metadata.ownerReferences != null) |.metadata.ownerReferences[] | select(.name !=null) | ((.apiVersion) // "-")),
-    "OWNER": (select(.metadata.ownerReferences != null) |.metadata.ownerReferences[] | select(.name !=null) | ((.kind + "/" + .name) // "-"))
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t'
-echo ""
-
-echo "========================================================================================="
-echo "Services SPEC"
-echo "========================================================================================="
-echo ""
-jq -r '
-[.items
-| sort_by(.metdata.name)[]
-| {
-    "NAME": (.metadata.name // "-"),
-    "SESSION AFFINITY": (.spec.sessionAffinity // "-"),
-    "TYPE": (.spec.type // "-"),
-    "IP POLICY": (.spec.ipFamilyPolicy // "-"),
-    "EXT TRAFFIC POLICY": (.spec.externalTrafficPolicy // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t'
 echo ""
 
 for ((i=0; i<$count; i++))
 do
   service=`jq -r '.items['${i}'].metadata.name' "${1}"`
   echo "========================================================================================="
-  echo "Service: ${service} DESCRIBE"
+  echo "${service} - DESCRIBE"
   echo "========================================================================================="
   echo ""
   echo ""
@@ -81,7 +56,7 @@ do
 
   # annotations
   printf "%-20s \n" "Annotations:"
-  value=$(jq -r '.items['${i}'].metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' "${1}" 2>/dev/null) | sed "s/^/                     /"
+  jq -r '.items['${i}'].metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' "${1}" 2>/dev/null | sed "s/^/                     /"
   
   # selector
   printf "%-20s \n" "Selector:"
@@ -160,12 +135,3 @@ fi
   echo ""
 
 done # end of i (main loop)
-
-
-echo ""
-echo ""
-echo "========================================================================================="
-echo "ConfigMaps managedFields dump"
-echo "========================================================================================="
-echo ""
-jq -r '.items[].metadata.managedFields' "${1}" 2>/dev/null

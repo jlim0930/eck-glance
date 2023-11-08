@@ -128,16 +128,28 @@ do
   # elasticmapsserver.json
   if [ -e "${WORKDIR}/${namespace}/elasticmapsserver.json" ] && [ $(du "${WORKDIR}/${namespace}/elasticmapsserver.json" | cut -f1) -gt 9 ]; then
     echo "|-- [DEBUG] Parsing elasticmapsserver.json"
-    ${SCRIPTDIR}/eck_elasticmapsserver_1.sh "${WORKDIR}/${namespace}/elasticmapsserver.json" > "${WORKDIR}/${namespace}/eck_elasticmapsservers.txt" 
+    ${SCRIPTDIR}/eck_ems_1.sh "${WORKDIR}/${namespace}/elasticmapsserver.json" > "${WORKDIR}/${namespace}/eck_elasticmapsservers.txt" 
 
     esmaplist=`jq -r '.items[].metadata.name' ${WORKDIR}/${namespace}/elasticmapsserver.json`
     for esmap in ${esmaplist}
     do
       echo "    |---- [DEBUG] Parsing elasticmapsserver.json for ${elasticmapsserver}"
-      ${SCRIPTDIR}/eck_elasticmapsserver_2.sh "${WORKDIR}/${namespace}/elasticmapsserver.json" "${esmap}" > "${WORKDIR}/${namespace}/eck_elasticmapsserver-${esmap}.txt"    
+      ${SCRIPTDIR}/eck_ems_2.sh "${WORKDIR}/${namespace}/elasticmapsserver.json" "${esmap}" > "${WORKDIR}/${namespace}/eck_elasticmapsserver-${esmap}.txt"    
     done
   fi
 
+# logstash.json
+  if [ -e "${WORKDIR}/${namespace}/logstash.json" ] && [ $(du "${WORKDIR}/${namespace}/logstash.json" | cut -f1) -gt 9 ]; then
+    echo "|-- [DEBUG] Parsing logstash.json"
+    ${SCRIPTDIR}/eck_logstash_1.sh "${WORKDIR}/${namespace}/logstash.json" > "${WORKDIR}/${namespace}/eck_logstashs.txt"
+
+    logstashlist=`jq -r '.items[].metadata.name' "${WORKDIR}/${namespace}/logstash.json"`
+    for logstash in ${logstashlist}
+    do
+      echo "    |---- [DEBUG] Parsing logstash.json.json for ${logstash}"
+      ${SCRIPTDIR}/eck_logstash_2.sh "${WORKDIR}/${namespace}/logstash.json" ${logstash} > "${WORKDIR}/${namespace}/eck_logstash-${logstash}.txt"
+    done
+  fi
 # ------
 
   # collect daemonsets.json
@@ -271,7 +283,7 @@ do
 
   # serviceaccount.json
   # v5
-  if [ -e "${WORKDIR}/${namespace}/serviceaccount.json" ] && [ $(du "${WORKDIR}/${namespace}/serviceaccount.json" | cut -f1) -gt 9 ]; then
+  if [ -e "${WORKDIR}/${namespace}/serviceaccount.json" ] && [ $(du "${WORKDIR}/${namespace}/serviceaccount.json" | cut -f1) -gt 7 ]; then
     echo "|-- [DEBUG] Parsing serviceaccount.json"
     ${SCRIPTDIR}/eck_serviceaccount_1.sh "${WORKDIR}/${namespace}/serviceaccount.json" > "${WORKDIR}/${namespace}/eck_serviceaccount.txt"
   fi

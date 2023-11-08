@@ -13,7 +13,7 @@ echo ""
 
 # POD SECTION
 echo "========================================================================================="
-echo "${2} - POD DETAILS"
+echo "${2} - DESCRIBE"
 echo "========================================================================================="
 echo ""
 
@@ -24,6 +24,7 @@ printf "%-20s %s\\n" "Name:" "${2}"
 value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.metadata.namespace // "-")' "${1}" 2>/dev/null)
 printf "%-20s %s \n" "Namespace:" "${value}"
 
+# local
 # pod priority
 value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.spec.priority // "-")' "${1}" 2>/dev/null)
 printf "%-20s %s \n" "Priority:" "${value}"
@@ -64,20 +65,64 @@ printf "%-20s %s \n" "Host IP:" "${value}"
 value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.metadata.ownerReferences[0].kind + "/" + .metadata.ownerReferences[0].name // "-")' "${1}" 2>/dev/null)
 printf "%-20s %s \n" "Controlled by:" "${value}"
 
+# apiVersion
+value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.metadata.ownerReferences[] | select(.controller==true) |.apiVersion|tostring // "-")' "${1}" 2>/dev/null)
+printf "%-20s %s\\n" "apiVersion:" "${value}"
+
 # pod qos class
 value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.status.qosClass // "-")' "${1}" 2>/dev/null)
 printf "%-20s %s \n" "QoS Class:" "${value}"
-
-# FIX - need to format better
-# affinity node selector
-printf "%-20s \n" "Affinity:"
-jq -r '.items[] | select(.metadata.name=="'${2}'").spec.affinity' "${1}" 2>/dev/null | sed "s/^/                     /"
 
 # pod tolerations
 printf "%-20s \n" "Tolerations:"
 jq -r '.items[] | select(.metadata.name=="'${2}'").spec.tolerations[] | (.key + ":" + .effect + " op=" + .operator + " for " + (.tolerationSeconds|tostring) + "s")' "${1}" | sed "s/^/                     /"
 echo ""
 
+# automount service token
+value=$(jq -r '.items[]| select(.metadata.name=="'${2}'").spec.automountServiceAccountToken|tostring' "${1}" 2>/dev/null)
+printf "%-35s %s\\n" "Automount ServiceToken:" "${value}"
+# dnspolicy
+value=$(jq -r '.items[]| select(.metadata.name=="'${2}'").spec.dnsPolicy|tostring' "${1}" 2>/dev/null)
+printf "%-35s %s\\n" "dnsPolicy:" "${value}"
+
+# restartPolicy
+value=$(jq -r '.items[]| select(.metadata.name=="'${2}'").spec.restartPolicy|tostring' "${1}" 2>/dev/null)
+printf "%-35s %s\\n" "restartPolicy:" "${value}"
+
+# schedulerName
+value=$(jq -r '.items[]| select(.metadata.name=="'${2}'").spec.schedulerName|tostring' "${1}" 2>/dev/null)
+printf "%-35s %s\\n" "Schedule Name:" "${value}"
+
+# terminationGracePeriodSeconds
+value=$(jq -r '.items[]| select(.metadata.name=="'${2}'").spec.terminationGracePeriodSeconds|tostring' "${1}" 2>/dev/null)
+printf "%-35s %s\\n" "terminationGracePeriodSeconds:" "${value}"
+
+# enableServiceLinks
+value=$(jq -r '.items[]| select(.metadata.name=="'${2}'").spec.enableServiceLinks|tostring' "${1}" 2>/dev/null)
+printf "%-35s %s\\n" "enableServiceLinks:" "${value}"
+
+# preemptionPolicy
+value=$(jq -r '.items[]| select(.metadata.name=="'${2}'").spec.preemptionPolicy|tostring' "${1}" 2>/dev/null)
+printf "%-35s %s\\n" "preemptionPolicy:" "${value}"
+
+# serviceAccount
+value=$(jq -r '.items[]| select(.metadata.name=="'${2}'").spec.serviceAccount|tostring' "${1}" 2>/dev/null)
+printf "%-35s %s\\n" "serviceAccount:" "${value}"
+
+# subdomain
+value=$(jq -r '.items[]| select(.metadata.name=="'${2}'").spec.subdomain|tostring' "${1}" 2>/dev/null)
+printf "%-35s %s\\n" "subdomain:" "${value}"
+
+# affinity node selector
+printf "%-20s \n" "Affinity:"
+jq -r '.items[] | select(.metadata.name=="'${2}'").spec.affinity' "${1}" 2>/dev/null | sed "s/^/                     /"
+
+# securityContext
+printf "%-20s \n" "securityContext:"
+jq -r '.items[]| select(.metadata.name=="'${2}'").spec.securityContext' "${1}" 2>/dev/null | sed "s/^/                     /"
+
+
+echo ""
 # pod conditions
 printf "%-20s \n" "Conditions:"
 value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.status.conditions[] | select(.type=="Initialized") | .status // "-")' "${1}" 2>/dev/null)
@@ -94,7 +139,7 @@ echo ""
 printf "%-20s \n" "Volumes:"
 
 # volumes - pvc
-echo "PersistentVolumeClaim" | sed "s/^/                     /"
+echo "== PVC" | sed "s/^/  /"
 jq -r '
   [.items[]
   | select(.metadata.name=="'${2}'")
@@ -107,7 +152,7 @@ jq -r '
 echo ""
 
 # volumes - configmap
-echo "ConfigMap" | sed "s/^/                     /"
+echo "== ConfigMap" | sed "s/^/  /"
 jq -r '
   [.items[]
   | select(.metadata.name=="'${2}'")
@@ -122,7 +167,7 @@ jq -r '
 echo ""
 
 # volumes - secret
-echo "Secrets" | sed "s/^/                     /"
+echo "== Secrets" | sed "s/^/  /"
 jq -r '
   [.items[]
   | select(.metadata.name=="'${2}'")
@@ -137,7 +182,7 @@ jq -r '
 echo ""
 
 # volumes - emptyDir
-echo "EmptyDir" | sed "s/^/                     /"
+echo "== emptyDir" | sed "s/^/  /"
 jq -r '
   [.items[]
   | select(.metadata.name=="'${2}'")
@@ -165,9 +210,7 @@ fi
 unset count
 count=`jq '.items[] | select(.metadata.name=="'${2}'").spec.initContainers | length' "${1}" 2>/dev/null`
 if [ ${count} -gt 0 ] || [ -z ${count} ]; then
-  echo "========================================================================================="
-  echo "POD: ${2} InitContainers"
-  echo "========================================================================================="
+  printf "%-20s \n" "Init Containers: ======================================================================"
   echo ""
 
   jq -r '
@@ -206,6 +249,17 @@ if [ ${count} -gt 0 ] || [ -z ${count} ]; then
   # initContainer Image ID
   value=$(jq -r '((.items[] | select(.metadata.name=="'${2}'").status.initContainerStatuses[] | select(.name=="'${initcontainername}'")).imageID // "-")' "${1}")
   printf "%-20s %s \n" "    Image ID:" "${value}"
+  
+  # initcontainer port
+  printf "%-20s %s\\n" "    Ports:"
+  jq -r '
+  [.items[] | select(.metadata.name=="'${2}'").spec.initContainers['${initcontainername}'].ports[]
+  | {
+      "NAME": (.name // "-"),
+      "PROTOCOL": (.protocol // "-"),
+      "containerPort": (.containerPort // "-")
+    }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t' | sed "s/^/      /"
+  echo ""
   
   # initContainer CMD
   echo "    Command"
@@ -253,6 +307,10 @@ if [ ${count} -gt 0 ] || [ -z ${count} ]; then
   value=$(jq -r '((.items[] | select(.metadata.name=="'${2}'").spec.initContainers[] | select(.name=="'${initcontainername}'").resources.requests.memory) // "-")' "${1}")
   printf "%-20s %s \n" "      Memory:" "${value}"
 
+  # initcontainer security context
+  printf "%-20s \n" "    Security Context:"
+  jq -r '.items[] | select(.metadata.name=="'${2}'").spec.initContainers['${i}'].securityContext' "${1}" 2>/dev/null | sed "s/^/      /"
+
   # initContainer envs
   echo "    Environment:"
   jq -r '
@@ -283,12 +341,10 @@ fi
 unset count
 count=`jq '.items[] | select(.metadata.name=="'${2}'").spec.containers | length' "${1}" 2>/dev/null`
 if [ ${count} -gt 0 ] || [ -z ${count} ]; then
-  echo "========================================================================================="
-  echo "POD: ${2} Containers"
-  echo "========================================================================================="
+  printf "%-20s \n" "Containers: ======================================================================"
   echo ""
 
-    jq -r '
+  jq -r '
   [.items[]
   | select(.metadata.name=="'${2}'").status.containerStatuses[]
   | {
@@ -348,15 +404,45 @@ if [ ${count} -gt 0 ] || [ -z ${count} ]; then
   value=$(jq -r '((.items[] | select(.metadata.name=="'${2}'").status.containerStatuses[] | select(.name=="'${containername}'").restartCount|tostring) // "-")' "${1}")
   printf "%-20s %s \n" "      Restart Count:" "${value}"
 
+  # container readinessprobe
+  printf "%-20s \n" "    readinessProbe:"
+  #jq -r '([.items[] | select(.metadata.name=="'${2}'").spec.containers['${i}'].readinessProbe // "-"' "${1}" 2>/dev/null | sed 's/\\n/\n/g; s/\\t/\t/g' 2>/dev/null | sed "s/^/                     /"
+  jq -r '.items[] | select(.metadata.name=="'${2}'").spec.containers['${i}'].readinessProbe' "${1}" 2>/dev/null | sed "s/^/                     /"
+
+  # container lifecycle prestop
+  printf "%-20s \n" "    lifecycle:"
+  #jq -r '([.items[] | select(.metadata.name=="'${2}'").spec.containers['${i}'].lifecycle // "-"' "${1}" 2>/dev/null | sed 's/\\n/\n/g; s/\\t/\t/g' 2>/dev/null | sed "s/^/                     /"
+  jq -r '.items[] | select(.metadata.name=="'${2}'").spec.containers['${i}'].lifecycle' "${1}" 2>/dev/null | sed "s/^/                     /"
+
   # Container Requests
-  echo "    Limits"
+  echo "    Requests"
   value=$(jq -r '((.items[] | select(.metadata.name=="'${2}'").spec.containers[] | select(.name=="'${containername}'").resources.requests.cpu) // "-")' "${1}")
   printf "%-20s %s \n" "      CPU:" "${value}"
   value=$(jq -r '((.items[] | select(.metadata.name=="'${2}'").spec.containers[] | select(.name=="'${containername}'").resources.requests.memory) // "-")' "${1}")
   printf "%-20s %s \n" "      Memory:" "${value}"
 
+  # Container Limits
+  echo "    Limits"
+  value=$(jq -r '((.items[] | select(.metadata.name=="'${2}'").spec.containers[] | select(.name=="'${containername}'").resources.limits.cpu) // "-")' "${1}")
+  printf "%-20s %s \n" "      CPU:" "${value}"
+  value=$(jq -r '((.items[] | select(.metadata.name=="'${2}'").spec.containers[] | select(.name=="'${containername}'").resources.limits.memory) // "-")' "${1}")
+  printf "%-20s %s \n" "      Memory:" "${value}"
+  
+  # Container security context
+  printf "%-20s \n" "    Security Context:"
+  jq -r '.items[] | select(.metadata.name=="'${2}'").spec.containers['${i}'].securityContext' "${1}" 2>/dev/null | sed "s/^/      /"
+
   # Container Readiness
   jq -r '([.items[] | select(.metadata.name=="'${2}'").spec.containers[]| select(.name=="'${containername}'").readinessProbe.exe.command[]] |join(" ") // "-")' "${1}"  2>/dev/null | sed 's/\\n/\n/g; s/\\t/\t/g'
+
+  # Container envs
+  echo "    Environment:"
+  jq -r '
+  [.items[] | select(.metadata.name=="'${2}'").spec.containers['${i}'].env[]
+  | {
+    "NAME": (.name // "-"),
+    "VALUE": (.value // .valueFrom.fieldRef.fieldPath)
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t' | sed 's/^/      /g'
 
   # Container mounts
   echo "    Mounts:"

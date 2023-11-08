@@ -32,12 +32,12 @@ printf "%-20s %s \n" "CreationTimestamp:" "${value}"
 if [ -f eck_events.txt ]; then
   echo ""
   printf "%-20s \n" "Events:"
-  cat eck_events.txt | grep "EnterpriseSearch/${2}"
+  cat eck_events.txt | grep "Logstash/${2}"
   echo ""
 elif [ -f "${WORKDIR}/${namespace}/eck_events.txt" ]; then
   echo ""
   printf "%-20s \n" "Events:"
-  cat "${WORKDIR}/${namespace}/eck_events.txt" | grep "EnterpriseSearch/${2}"
+  cat "${WORKDIR}/${namespace}/eck_events.txt" | grep "Logstash/${2}"
   echo ""
 fi
 

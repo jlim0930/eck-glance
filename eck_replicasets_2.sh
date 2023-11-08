@@ -2,7 +2,7 @@
 
 
 echo "========================================================================================="
-echo "${2} - ReplicaSets DESCRIBE"
+echo "${2} - DESCRIBE"
 echo "========================================================================================="
 echo ""
 
@@ -13,46 +13,336 @@ printf "%-20s %s\\n" "Name:" "${2}"
 value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.metadata.namespace // "-")' "${1}" 2>/dev/null)
 printf "%-20s %s \n" "Namespace:" "${value}"
 
-# CreationTimestamp
-value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.metadata.creationTimestamp // "-")' "${1}" 2>/dev/null)
-printf "%-20s %s \n" "CreationTimestamp:" "${value}"
-
-# selector
-printf "%-20s \n" "Selectors:"
-jq -r '.items[] | select(.metadata.name=="'${2}'") | .spec.selector.matchLabels | (to_entries[] | "\(.key)=\(.value)"), "" | select(length >0)' "${1}" 2>/dev/null | sed "s/^/                     /"
-
-# labels
-printf "%-20s \n" "Labels:"
-jq -r '.items[] | select(.metadata.name=="'${2}'").metadata.labels | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' "${1}" 2>/dev/null | sed "s/^/                     /"
-
-# annotations
-printf "%-20s \n" "Annotations:"
-jq -r '.items[] | select(.metadata.name=="'${2}'").metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' "${1}" 2>/dev/null | sed "s/^/                     /"
-
-# controlled by
-value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.metadata.ownerReferences[0].kind + "/" + .metadata.ownerReferences[0].name // "-")' "${1}" 2>/dev/null)
-printf "%-20s %s\\n" "Controlled By:" "${value}"
-
-# Replicas
-value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | ((.status.readyReplicas // "-") + " current | " + (.status.replicas|tostring) + " desired" // "-")' "${1}" 2>/dev/null)
-printf "%-20s %s\\n" "Replicas:" "${value}"
-echo ""
-
-# affinity
-# FIX - might need fix if object doesnt exist - fixed need to test
-#value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | ((.spec.template.spec.affinity.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution[].podAffinityTerm.labelSelector.matchLabels|(to_entries[] | "\(.key)=\(.value)"))? // "-")' "${1}" 2>/dev/null)
-#printf "%-20s %s\\n" "Affinity:" "${value}"
-printf "%-20s \n" "Affinity:"
-jq -r '.items[] | select(.metadata.name=="'${2}'").spec.template.spec.affinity' "${1}" 2>/dev/null | sed "s/^/                     /"
-
-# apiVersion
-value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.metadata.ownerReferences[] | select(.controller==true) |.apiVersion/ // "-")' "${1}" 2>/dev/null)
-printf "%-20s %s\\n" "apiVersion:" "${value}"
-
 # owner Reference
 value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.metadata.ownerReferences[] | select(.controller==true) |.kind + "/" + .name // "-")' "${1}" 2>/dev/null)
 printf "%-20s %s\\n" "Owner Reference:" "${value}"
 
+# apiVersion
+value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.metadata.ownerReferences[] | select(.controller==true) |.apiVersion|tostring // "-")' "${1}" 2>/dev/null)
+printf "%-20s %s\\n" "apiVersion:" "${value}"
+
+# CreationTimestamp
+value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.metadata.creationTimestamp // "-")' "${1}" 2>/dev/null)
+printf "%-20s %s \n" "CreationTimestamp:" "${value}"
+
+# replicas
+value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | ((.status.replicas|tostring) + " desired | " + (.status.readyReplicas|tostring) + " ready" // "-")' "${1}" 2>/dev/null)
+printf "%-20s %s\\n" "Replicas:" "${value}"
+
+# updateStrategy
+value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.spec.updateStrategy.type // "-")' "${1}" 2>/dev/null)
+printf "%-20s %s\\n" "UpdateStrategy:" "${value}"
+
+# pod status
+value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | ((.status.readyReplicas|tostring) + " Running | " + (.status.replicas|tostring) + " total" // "-")' "${1}" 2>/dev/null)
+printf "%-20s %s\\n" "POD Status:" "${value}"
+
+# selector
+printf "%-20s \n" "Selectors:"
+jq -r '.items[] | select(.metadata.name=="'${2}'").spec.selector.matchLabels | (to_entries[] | "\(.key)=\(.value)"), "" | select(length >0)' "${1}" 2>/dev/null | sed "s/^/                     /"
+
+# annotations
+printf "%-20s \n" "Annotations:"
+#jq -r '.items[]| select(.metadata.name=="'${2}'").metadata.annotations | to_entries | .[] | "* \(.key)",(.value | if try fromjson catch false then fromjson else . end),"     "' "${1}" 2>/dev/null
+jq -r '.items[]| select(.metadata.name=="'${2}'").metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' "${1}" 2>/dev/null | sed "s/^/                     /"
+
+# labels
+printf "%-20s \n" "Labels:"
+jq -r '.items[]| select(.metadata.name=="'${2}'").metadata.labels | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' "${1}" 2>/dev/null | sed "s/^/                     /"
+
+echo ""
+# Pod Template
+printf "%-20s \n" "Pod Template:"
+
+# automount service token
+value=$(jq -r '.items[]| select(.metadata.name=="'${2}'").spec.template.spec.automountServiceAccountToken|tostring' "${1}" 2>/dev/null)
+printf "%-35s %s\\n" "  Automount ServiceToken:" "${value}"
+# dnspolicy
+value=$(jq -r '.items[]| select(.metadata.name=="'${2}'").spec.template.spec.dnsPolicy|tostring' "${1}" 2>/dev/null)
+printf "%-35s %s\\n" "  dnsPolicy:" "${value}"
+
+# restartPolicy
+value=$(jq -r '.items[]| select(.metadata.name=="'${2}'").spec.template.spec.restartPolicy|tostring' "${1}" 2>/dev/null)
+printf "%-35s %s\\n" "  restartPolicy:" "${value}"
+
+# schedulerName
+value=$(jq -r '.items[]| select(.metadata.name=="'${2}'").spec.template.spec.schedulerName|tostring' "${1}" 2>/dev/null)
+printf "%-35s %s\\n" "  Schedule Name:" "${value}"
+
+# terminationGracePeriodSeconds
+value=$(jq -r '.items[]| select(.metadata.name=="'${2}'").spec.template.spec.terminationGracePeriodSeconds|tostring' "${1}" 2>/dev/null)
+printf "%-35s %s\\n" "  terminationGracePeriodSeconds:" "${value}"
+
+# securityContext
+printf "%-35s \n" "  securityContext:"
+jq -r '.items[]| select(.metadata.name=="'${2}'").spec.template.spec.securityContext' "${1}" 2>/dev/null | sed "s/^/                     /"
+
+# affinity
+printf "%-20s \n" "  affinity:"
+jq -r '.items[]| select(.metadata.name=="'${2}'").spec.template.spec.affinity' "${1}" 2>/dev/null | sed "s/^/                     /"
+
+# labels
+printf "%-20s \n" "  Labels:"
+jq -r '.items[]| select(.metadata.name=="'${2}'").spec.template.metadata.labels | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' "${1}" 2>/dev/null | sed "s/^/    /"
+
+# annotations
+printf "%-20s \n" "  Annotations:"
+jq -r '.items[] | select(.metadata.name=="'${2}'").spec.template.metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' "${1}" 2>/dev/null | sed "s/^/    /"
+
+echo ""
+
+# InitContainers
+count=0
+count=`jq '.items[] | select(.metadata.name=="'${2}'").spec.template.spec.initContainers | length' "${1}" 2>/dev/null`
+if [ ${count} -gt 0 ] || [ -z ${count} ]; then
+  printf "%-20s \n" "  Init Containers: ======================================================================"
+
+  for ((i=0; i<$count; i++))
+  do
+    # initcontainer name
+    initcontainername=`jq -r '.items[] | select(.metadata.name=="'${2}'").spec.template.spec.initContainers['${i}'].name' "${1}"`
+    printf "%-20s %s\\n" "    Name:" "${initcontainername}"
+    
+    # initcontainer image
+    value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.spec.template.spec.initContainers['${i}'].image // "-")' "${1}" 2>/dev/null)
+    printf "%-20s %s\\n" "    Image:" "${value}"
+
+    # initcontainer port
+    printf "%-20s %s\\n" "    Ports:"
+    jq -r '
+    [.items[] | select(.metadata.name=="'${2}'").spec.template.spec.initContainers['${i}'].ports[]
+    | {
+        "NAME": (.name // "-"),
+        "PROTOCOL": (.protocol // "-"),
+        "containerPort": (.containerPort // "-")
+      }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t' | sed "s/^/      /"
+    echo ""
+
+    # initcontainer command
+    printf "%-20s \n" "    Command:"
+    jq -r '([.items[] | select(.metadata.name=="'${2}'").spec.template.spec.initContainers['${i}'].command[]] |join(" ") // "-")' "${1}" 2>/dev/null | sed 's/\\n/\n/g; s/\\t/\t/g' 2>/dev/null | sed "s/^/                     /"
+
+    # initcontianer limits
+    printf "%-20s \n" "    Limits:"
+    value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.spec.template.spec.initContainers['${i}'].resources.limits.cpu // "-")' "${1}" 2>/dev/null)
+    printf "%-20s %s\\n" "      CPU:" "${value}"
+    value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.spec.template.spec.initContainers['${i}'].resources.limits.memory // "-")' "${1}" 2>/dev/null)
+    printf "%-20s %s\\n" "      Memory:" "${value}"
+
+    # initcontianer requests
+    printf "%-20s \n" "    Requests:"
+    value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.spec.template.spec.initContainers['${i}'].resources.requests.cpu // "-")' "${1}" 2>/dev/null)
+    printf "%-20s %s\\n" "      CPU:" "${value}"
+    value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.spec.template.spec.initContainers['${i}'].resources.requests.memory // "-")' "${1}" 2>/dev/null)
+    printf "%-20s %s\\n" "      Memory:" "${value}"
+  
+    # initcontainer security context
+    printf "%-20s \n" "    Security Context:"
+    jq -r '.items[] | select(.metadata.name=="'${2}'").spec.template.spec.initContainers['${i}'].securityContext' "${1}" 2>/dev/null | sed "s/^/      /"
+
+    #initcontainer environment
+    printf "%-20s \n" "    Environment:"
+    jq -r '
+    [.items[] | select(.metadata.name=="'${2}'").spec.template.spec.initContainers['${i}'].env[]
+    | {
+      "name": (.name // "-"),
+      "value": (.value // .valueFrom.fieldRef.fieldPath)
+    }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t' | sed "s/^/      /"
+  
+    #initcontainer mounts
+    printf "%-20s \n" "    Mounts:"
+    jq -r '
+    [.items[] | select(.metadata.name=="'${2}'").spec.template.spec.initContainers['${i}'].volumeMounts[]
+    | {
+      "Name": (.name // "-"),  
+      "Mount Path": (.mountPath // "-"),
+      "ReadOnly": (.readOnly // "-")
+    }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t' | sed "s/^/      /"
+
+
+  echo "---------------------------------------------------------"
+  done
+  echo ""
+fi
+
+echo ""
+echo ""
+
+# Containers
+count=0
+count=`jq '.items[] | select(.metadata.name=="'${2}'").spec.template.spec.containers | length' "${1}" 2>/dev/null`
+if [ ${count} -gt 0 ] || [ -z ${count} ]; then
+  printf "%-20s \n" "  Containers: ======================================================================"
+
+  for ((i=0; i<$count; i++))
+  do
+    # container name
+    containername=`jq -r '.items[] | select(.metadata.name=="'${2}'").spec.template.spec.containers['${i}'].name' "${1}"`
+    printf "%-20s %s\\n" "    Name:" "${containername}"
+    
+    # container image
+    value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.spec.template.spec.containers['${i}'].image // "-")' "${1}" 2>/dev/null)
+    printf "%-20s %s\\n" "    Image:" "${value}"
+
+    # container port
+    printf "%-20s %s\\n" "    Ports:"
+    jq -r '
+    [.items[] | select(.metadata.name=="'${2}'").spec.template.spec.containers['${i}'].ports[]
+    | {
+        "NAME": (.name // "-"),
+        "PROTOCOL": (.protocol // "-"),
+        "containerPort": (.containerPort // "-")
+      }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t' | sed "s/^/      /"
+    echo ""
+
+    # container readinessprobe
+    printf "%-20s \n" "    readinessProbe:"
+    #jq -r '([.items[] | select(.metadata.name=="'${2}'").spec.template.spec.containers['${i}'].readinessProbe.exec.command[]] |join(" ") // "-")' "${1}" 2>/dev/null | sed 's/\\n/\n/g; s/\\t/\t/g' 2>/dev/null | sed "s/^/                     /"
+    jq -r '.items[] | select(.metadata.name=="'${2}'").spec.template.spec.containers['${i}'].readinessProbe' "${1}" 2>/dev/null | sed "s/^/      /"
+    
+    # container lifecycle prestop
+    printf "%-20s \n" "    lifecycle:"
+    #jq -r '([.items[] | select(.metadata.name=="'${2}'").spec.template.spec.containers['${i}'].lifecycle.preStop.exec.command[]] |join(" ") // "-")' "${1}" 2>/dev/null | sed 's/\\n/\n/g; s/\\t/\t/g' 2>/dev/null | sed "s/^/                     /"
+    jq -r '.items[] | select(.metadata.name=="'${2}'").spec.template.spec.containers['${i}'].lifecycle' "${1}" 2>/dev/null | sed "s/^/        /"
+    
+    # contianer limits
+    printf "%-20s \n" "    Limits:"
+    value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.spec.template.spec.containers['${i}'].resources.limits.cpu // "-")' "${1}" 2>/dev/null)
+    printf "%-20s %s\\n" "      CPU:" "${value}"
+    value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.spec.template.spec.containers['${i}'].resources.limits.memory // "-")' "${1}" 2>/dev/null)
+    printf "%-20s %s\\n" "      Memory:" "${value}"
+
+    # contianer requests
+    printf "%-20s \n" "    Requests:"
+    value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.spec.template.spec.containers['${i}'].resources.requests.cpu // "-")' "${1}" 2>/dev/null)
+    printf "%-20s %s\\n" "      CPU:" "${value}"
+    value=$(jq -r '.items[] | select(.metadata.name=="'${2}'") | (.spec.template.spec.containers['${i}'].resources.requests.memory // "-")' "${1}" 2>/dev/null)
+    printf "%-20s %s\\n" "      Memory:" "${value}"
+  
+    # container security context
+    printf "%-20s \n" "    Security Context:"
+    jq -r '.items[] | select(.metadata.name=="'${2}'").spec.template.spec.containers['${i}'].securityContext' "${1}" 2>/dev/null | sed "s/^/      /"
+
+    #container environment
+    printf "%-20s \n" "    Environment:"
+    jq -r '
+    [.items[] | select(.metadata.name=="'${2}'").spec.template.spec.containers['${i}'].env[]
+    | {
+      "name": (.name // "-"),
+      "value": (.value // .valueFrom.fieldRef.fieldPath)
+    }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t' | sed "s/^/      /"
+  
+    #container mounts
+    printf "%-20s \n" "    Mounts:"
+    jq -r '
+    [.items[] | select(.metadata.name=="'${2}'").spec.template.spec.containers['${i}'].volumeMounts[]
+    | {
+      "Name": (.name // "-"),  
+      "Mount Path": (.mountPath // "-"),
+      "ReadOnly": (.readOnly // "-")
+    }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t' | sed "s/^/      /"
+
+
+  echo "---------------------------------------------------------"
+  done
+  echo ""
+fi
+
+echo ""
+echo ""
+
+# volumes
+printf "%-20s \n" "  Volumes:"
+
+jq -r '
+(.items[] | .metadata.name as $podname 
+| (.spec.volumes[]
+| select(.persistentVolumeClaim != null)
+| [ $podname,
+(.name // "-"),
+(.persistentVolumeClaim.claimName // "-")]))
+| join(",")
+' "${1}"  2>/dev/null | column -t -s ","
+echo ""
+
+echo "== PVC" | sed "s/^/  /"
+jq -r '
+  [.items[]
+  | select(.metadata.name=="'${2}'")
+  | .spec.template.spec.volumes[]
+  | select(.persistentVolumeClaim != null)
+  | {
+      "name": (.name // "-"),
+      "configName": (.persistentVolumeClaim.claimName // "-"),
+      "defaultMode": (.secret.defaultMode // "-"),
+      "optional": .secret.optional
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t' | sed "s/^/    /"
+echo ""
+
+echo "== ConfigMap" | sed "s/^/  /"
+jq -r '
+  [.items[]
+  | select(.metadata.name=="'${2}'")
+  | .spec.template.spec.volumes[]
+  | select(.configMap != null)
+  | {
+      "name": (.name // "-"),
+      "configName": (.configMap.name),
+      "defaultMode": (.secret.defaultMode // "-"),
+      "optional": .secret.optional
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t' | sed "s/^/    /"
+echo ""
+
+# volumes - secret
+echo "== Secrets" | sed "s/^/  /"
+jq -r '
+  [.items[]
+  | select(.metadata.name=="'${2}'")
+  | .spec.template.spec.volumes[]
+  | select(.secret != null)
+  | {
+      "name": (.name // "-"),
+      "secretName": (.secret.secretName // "-"),
+      "defaultMode": (.secret.defaultMode // "-"),
+      "optional": .secret.optional
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t' | sed "s/^/    /"
+echo ""
+
+# volumes - emptyDir
+echo "== emptyDir" | sed "s/^/  /"
+jq -r '
+  [.items[]
+  | select(.metadata.name=="'${2}'")
+  | .spec.template.spec.volumes[]
+  | select(.emptyDir != null)
+  | {
+      "name": (.name // "-")
+  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t' | sed "s/^/    /"
+echo ""
+
+echo ""
+echo ""
+# volume claims
+printf "%-20s \n" "Volume Claims:"
+printf "%-20s \n" "  Retention Policy:"
+jq -r '.items[] | select(.metadata.name=="'${2}'").spec.persistentVolumeClaimRetentionPolicy' "${1}" 2>/dev/null | sed "s/^/    /"
+
+echo ""
+jq -r '
+[.items[] | select(.metadata.name=="'${2}'")
+| {
+    "Name": .metadata.name} +
+      (.spec.volumeClaimTemplates[] | {
+        "VC Name": (.metadata.name // "-"),
+        "Request Size": (.spec.resources.requess.storage // "-"),
+        "Storage Class": (.spec.storageClassName // "-"),
+        "Volume Mode": (.spec.volumeMode // "-"),
+        "Status": (.status.phase // "-")
+  })] | (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t' | sed "s/^/  /g"
+echo ""
+
+echo ""
+echo ""
 # events
 if [ -f eck_events.txt ]; then
   echo ""
@@ -66,186 +356,3 @@ elif [ -f "${WORKDIR}/${namespace}/eck_events.txt" ]; then
   echo ""
 fi
 
-
-# Pod Template
-printf "%-20s \n" "Pod Template:"
-
-# labels
-printf "%-20s \n" "  Labels:"
-jq -r '.items[] | select(.metadata.name=="'${2}'").spec.template.metadata.labels | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' "${1}" 2>/dev/null | sed "s/^/                     /"
-
-# annotations
-printf "%-20s \n" "  Annotations:"
-jq -r '.items[] | select(.metadata.name=="'${2}'").spec.template.metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' "${1}" 2>/dev/null | sed "s/^/                     /"
-echo ""
-
-# volumes
-printf "%-20s \n" "  Volumes:"
-echo "------------------------------------------------------------------------------------  Volumes - Secrets" | sed "s/^/  /"
-echo ""
-jq -r '
-[.items[]
-| select(.metadata.name=="'${2}'")
-| .spec.template.spec.volumes[]
-| select(.secret != null)
-| {
-    "Name": (.name // "-"),
-    "Secret Name": (.secret.secretName // "-"),
-    "Default Mode": (.secret.defaultMode // "-"),
-    "Optional": .secret.optional
-}
-]
-| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t' | sed "s/^/  /"
-echo ""
-
-echo "------------------------------------------------------------------------------------  Volumes - hostPath" | sed "s/^/  /"
-echo ""
-jq -r '
-[.items[]
-| select(.metadata.name=="'${2}'")
-| .spec.template.spec.volumes[]
-| select(.hostPath != null)
-| {
-    "Name": (.name // "-"),
-    "Path": (.hostPath.path // "-"),
-    "Type": (.hostPath.type // "-")
-}
-]
-| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t' | sed "s/^/  /"
-echo ""
-
-# InitContainer SECTION
-count=`jq '.items[] | select(.metadata.name=="'${2}'").spec.template.spec.initContainers | length' "${1}"` 
-if [ ${count} -gt 0 ]; then
-  echo "========================================================================================="
-  echo "ReplicaSet: ${2} InitContainers"
-  echo "========================================================================================="
-  echo ""
-
-  for ((i=0; i<$count; i++))
-  do
-    initcontainername=`jq -r '.items[] | select(.metadata.name=="'${2}'").spec.template.spec.initContainers['${i}'].name' "${1}"`
-    echo "====== InitContainer: ${initcontainername} ====================================================="
-    echo ""
-    jq -r '
-    [.items[] | select(.metadata.name=="'${2}'").spec.template.spec.initContainers['${i}']
-    | {
-        "InitContainer Name": (.name // "-"),
-        "CPU Request": (.resources.requests.cpu // "-"),
-        "CPU Limits": (.resources.limits.cpu // "-"),
-        "MEM Request": (.resources.requests.memory // "-"),
-        "MEM Limits": (.resources.limits.memory // "-"),
-        "Image": (.image // "-"),
-      }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t'
-    echo ""
-
-    # InitContainer Network
-    echo "------------------------------------------------------------------------------------  Network"
-    jq -r '
-    [.items[] | select(.metadata.name=="'${2}'").spec.template.spec.initContainers['${i}'].ports[]
-    | {
-      "Name": (.name // "-"),  
-      "InitContainer Port": (.InitContainerPort // "-"),
-      "Protocol": (.protocol // "-")
-    }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t'
-    echo ""
-
-    # InitContainer volumes
-    echo "------------------------------------------------------------------------------------  Volumes"
-    jq -r '
-    [.items[] | select(.metadata.name=="'${2}'").spec.template.spec.initContainers['${i}'].volumeMounts[]
-    | {
-      "Name": (.name // "-"),  
-      "Mount Path": (.mountPath // "-"),
-      "ReadOnly": (.readOnly // "-")
-    }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t'
-    echo ""
-
-    # InitContainer args
-    echo "------------------------------------------------------------------------------------  ARGs"
-    jq -r '([.items[] | select(.metadata.name=="'${2}'").spec.template.spec.initContainers['${i}'].args[]] |join(" ") // "-")' "${1}" 2>/dev/null | sed 's/\\n/\n/g; s/\\t/\t/g'
-    echo ""
-
-    # InitContainer env
-    echo "------------------------------------------------------------------------------------  Env"
-    jq -r '
-    [.items[] | select(.metadata.name=="'${2}'").spec.template.spec.initContainers['${i}'].env[]
-    | {
-      "Name": (.name // "-"),
-      "Value": (.value // .valueFrom.fieldRef.fieldPath // .valueFrom.secretKeyRef.name)
-    }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t'
-    echo ""
-
-    echo "------------------------------------------------------------------------------------  Command"
-    jq -r '([.items[] | select(.metadata.name=="'${ss}'").spec.template.spec.initContainers['${i}'].command[]] |join(" ") // "-")' "${1}" | sed 's/\\n/\n/g; s/\\t/\t/g' 2>/dev/null
-    echo ""
-
-  done # end of loop (InitContainers)
-fi
-
-# CONTAINER SECTION
-count=`jq '.items[] | select(.metadata.name=="'${2}'").spec.template.spec.containers | length' "${1}"` 
-if [ ${count} -gt 0 ]; then
-  echo "========================================================================================="
-  echo "ReplicaSet: ${2} Containers"
-  echo "========================================================================================="
-  echo ""
-
-  for ((i=0; i<$count; i++))
-  do
-    containername=`jq -r '.items[] | select(.metadata.name=="'${2}'").spec.template.spec.containers['${i}'].name' "${1}"`
-    echo "====== Container: ${containername} ====================================================="
-    echo ""
-    jq -r '
-    [.items[] | select(.metadata.name=="'${2}'").spec.template.spec.containers['${i}']
-    | {
-        "Container Name": (.name // "-"),
-        "CPU Request": (.resources.requests.cpu // "-"),
-        "CPU Limits": (.resources.limits.cpu // "-"),
-        "MEM Request": (.resources.requests.memory // "-"),
-        "MEM Limits": (.resources.limits.memory // "-"),
-        "Image": (.image // "-"),
-      }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t'
-    echo ""
-
-    # CONTAINER Network
-    echo "------------------------------------------------------------------------------------  Network"
-    jq -r '
-    [.items[] | select(.metadata.name=="'${2}'").spec.template.spec.containers['${i}'].ports[]
-    | {
-      "Name": (.name // "-"),  
-      "Container Port": (.containerPort // "-"),
-      "Protocol": (.protocol // "-")
-    }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t'
-    echo ""
-
-    # CONTAINER volumes
-    echo "------------------------------------------------------------------------------------  Volumes"
-    jq -r '
-    [.items[] | select(.metadata.name=="'${2}'").spec.template.spec.containers['${i}'].volumeMounts[]
-    | {
-      "Name": (.name // "-"),  
-      "Mount Path": (.mountPath // "-"),
-      "ReadOnly": (.readOnly // "-")
-    }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t'
-    echo ""
-
-    # CONTAINER args
-    echo "------------------------------------------------------------------------------------  ARGs"
-    jq -r '([.items[] | select(.metadata.name=="'${2}'").spec.template.spec.containers['${i}'].args[]] |join(" ") // "-")' "${1}"  2>/dev/null | sed 's/\\n/\n/g; s/\\t/\t/g'
-    echo ""
-
-    # CONTAINER env
-    echo "------------------------------------------------------------------------------------  Env"
-    jq -r '
-    [.items[] | select(.metadata.name=="'${2}'").spec.template.spec.containers['${i}'].env[]
-    | {
-      "Name": (.name // "-"),
-      "Value": (.value // .valueFrom.fieldRef.fieldPath // .valueFrom.secretKeyRef.name)
-    }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t'
-    echo ""
-
-  done # end of loop (containers)
-  echo ""
-
-fi

@@ -7,7 +7,7 @@ if [ ${count} = 0 ]; then
 fi
 
 echo "========================================================================================="
-echo "PersistentVolumes Summary"
+echo "Summary"
 echo "========================================================================================="
 echo ""
 
@@ -33,7 +33,7 @@ for ((i=0; i<$count; i++))
 do
   pv=`jq -r '.items['${i}'].metadata.name' "${1}"`
   echo "========================================================================================="
-  echo "PersistentVolumes: ${pv} DESCRIBE"
+  echo "${pv} - DESCRIBE"
   echo "========================================================================================="
   echo ""
 
@@ -88,7 +88,10 @@ do
   # source
   printf "%-20s \n" "Source:"
   # FIX - need better formatting - hard since the key can be anything with "isk"
-  jq -r '.items[0].spec | with_entries( select(.key|contains("isk")))| keys[] as $k | "\($k)",.[$k]' "${1}" 2>/dev/null | sed "s/^/    /"
+  #jq -r '.items[0].spec | with_entries( select(.key|contains("isk")))| keys[] as $k | "\($k)",.[$k]' "${1}" 2>/dev/null | sed "s/^/    /"
+  jq -r '.items['${i}'].spec.csi | keys[] as $k | "\n-- CSI: \($k) ",.[$k]' "${1}" 2>/dev/null
+
+
 
   # OLD
   #  type=$(jq -r '.items['${i}'].spec | with_entries( select(.key|contains("isk"))) | to_entries[] | "\(.key)"'  "${1}" 2>/dev/null)
@@ -109,21 +112,11 @@ done # end of i (main loop)
 if [ -f eck_events.txt ]; then
   echo ""
   printf "%-20s \n" "Events:"
-  cat eck_events.txt | grep "PersistentVolume"
+  cat eck_events.txt | grep "PersistentVolume "
   echo ""
 elif [ -f "${WORKDIR}/${namespace}/eck_events.txt" ]; then
   echo ""
   printf "%-20s \n" "Events:"
-  cat "${WORKDIR}/${namespace}/eck_events.txt" | grep "PersistentVolume"
+  cat "${WORKDIR}/${namespace}/eck_events.txt" | grep "PersistentVolume "
   echo ""
 fi
-
-
-
-echo ""
-echo ""
-echo "========================================================================================="
-echo "Endpoints managedFields dump"
-echo "========================================================================================="
-echo ""
-jq -r '.items[].metadata.managedFields' "${1}" 2>/dev/null

@@ -16,8 +16,6 @@ jq -r '
 | sort_by(.metdata.name)[]
 | {
     "NAME": (.metadata.name // "-"),
-    "SECRET COUNT": (.secrets | length // "-"),
-    "SECRET": ([.secrets[].name]|join(",")),
     "CREATION TIME": (.metadata.creationTimestamp // "-")
   }
 ]
@@ -41,18 +39,17 @@ do
   value=$(jq -r '.items[] | select(.metadata.name=="'${sa}'") | (.metadata.namespace // "-")' "${1}" 2>/dev/null)
   printf "%-20s %s \n" "Namespace:" "${value}"
 
+  echo ""
   # labels
   printf "%-20s \n" "Labels:"
   jq -r '.items[] | select(.metadata.name=="'${sa}'").metadata.labels | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' "${1}" 2>/dev/null | sed "s/^/                     /"
-
+  
+  echo ""
   # annotations
   printf "%-20s \n" "Annotations:"
-  jq -r '.items[] | select(.metadata.name=="'${sa}'").metadata.annotations | (to_entries[] | "\(.key)=\(.value)") | select(length >0)' "${1}" 2>/dev/null | sed "s/^/                     /"
+  jq -r '.items[]| select(.metadata.name=="'${sa}'").metadata.annotations | to_entries | .[] | "* \(.key)",(.value | if try fromjson catch false then fromjson else . end),"    "' "${1}" 2>/dev/null
+  
   echo ""
-
-  # secrets
-  printf "%-20s \n" "Secrets:"
-  jq -r '(.items[] | select(.metadata.name=="'${sa}'") | [.secrets[].name] | join(",") // "-")' "${1}" 2>/dev/null | sed "s/^/                     /"
 
   # events
 if [ -f eck_events.txt ]; then

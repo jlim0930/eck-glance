@@ -8,7 +8,7 @@ fi
 
 echo ""
 echo "========================================================================================="
-echo "ConfigMaps Summary"
+echo "Summary"
 echo "========================================================================================="
 echo ""
 jq -r '
@@ -17,21 +17,9 @@ jq -r '
 | {
     "NAME": (.metadata.name // "-"),
     "DATA": (.data| length // "-"),
-    "CREATION TIME": (.metadata.creationTimestamp // "-")
-  }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t'
-echo ""
-
-echo "========================================================================================="
-echo "ConfigMaps Owner"
-echo "========================================================================================="
-echo ""
-jq -r '
-[.items
-| sort_by(.metdata.name)[]
-| {
-    "NAME": (.metadata.name // "-"),
+    "OWNER": (select(.metadata.ownerReferences != null) |.metadata.ownerReferences[] | select(.name !=null) | ((.kind + "/" + .name) // "-")),
     "APIVERSION": (select(.metadata.ownerReferences != null) |.metadata.ownerReferences[] | select(.name !=null) | ((.apiVersion) // "-")),
-    "OWNER": (select(.metadata.ownerReferences != null) |.metadata.ownerReferences[] | select(.name !=null) | ((.kind + "/" + .name) // "-"))
+    "CREATION TIME": (.metadata.creationTimestamp // "-")
   }]| (.[0] |keys_unsorted | @tsv),(.[]|.|map(.) |@tsv)' "${1}" 2>/dev/null | column -ts $'\t'
 echo ""
 
@@ -56,7 +44,7 @@ for ((i=0; i<$count; i++))
 do
   configmap=`jq -r '.items['${i}'].metadata.name' "${1}"`
   echo "========================================================================================="
-  echo "ConfigMap: ${configmap} DESCRIBE"
+  echo "${configmap} - DESCRIBE"
   echo "========================================================================================="
   echo ""
   echo ""
@@ -81,11 +69,3 @@ do
   echo ""
 done # end of i (main loop)
 echo ""
-
-echo ""
-echo ""
-echo "========================================================================================="
-echo "ConfigMaps managedFields dump"
-echo "========================================================================================="
-echo ""
-jq -r '.items[].metadata.managedFields' "${1}" 2>/dev/null
