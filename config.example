@@ -1,0 +1,22 @@
+# ECK Glance launcher configuration
+# Loaded by web.sh from the same directory as this file.
+#
+# Default server port used when PORT env var and -p/--port are not set
+DEFAULT_PORT="3333"
+
+# Allowed: light | dark
+DEFAULT_THEME="light"
+
+# Directory for uploaded/extracted bundles
+UPLOADS_DIR="/tmp/eck-glance-uploads"
+
+# Optional Gemini API key for future integrations
+# https://ai.google.dev/gemini-api/docs/api-key
+GEMINI_API_KEY=""
+
+# Optional CA bundle file used for Gemini HTTPS requests on Python installs
+# that cannot locate system root certificates automatically.
+# Example macOS/Homebrew paths:
+#   /etc/ssl/cert.pem
+#   /opt/homebrew/etc/openssl@3/cert.pem
+SSL_CERT_FILE=""
