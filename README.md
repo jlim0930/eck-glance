@@ -64,11 +64,13 @@ chmod +x eck-glance.sh web.sh
 cp config.example config
 ```
 
+Edit `config` for your liking 
+
 Store your local runtime variables in `config`. The recommended flow is to copy `config.example` to `config` and edit `config` rather than modifying the example file directly.
 
-## Using `eck-glance.sh`
+## Using `eck-glance.sh` for CLI Usage
 
-### Web Usage
+### CLI Usage
 
 ```bash
 eck-glance.sh [OPTIONS] [PATH]
@@ -76,7 +78,7 @@ eck-glance.sh [OPTIONS] [PATH]
 
 `PATH` is the extracted `eck-diagnostics` directory. If omitted, the current directory is used.
 
-### Web Options
+### CLI Options
 
 - `-o, --output DIR`: write output to a custom directory
 - `-f, --fast`: run parsing jobs in parallel
@@ -85,7 +87,7 @@ eck-glance.sh [OPTIONS] [PATH]
 - `-h, --help`: show help
 - `-v, --version`: show version
 
-### Web Examples
+### CLI Examples
 
 Parse the current directory:
 
@@ -112,7 +114,7 @@ Use parallel mode on a larger workstation:
 /path/to/eck-glance/eck-glance.sh --fast /path/to/eck-diagnostics
 ```
 
-### Web Expectations
+### CLI Expectations
 
 By default, output is written to:
 
@@ -125,6 +127,7 @@ Common files you should expect:
 - `00_summary.txt`: high-level overview and health summary. Start here first.
 - `00_diagnostic-errors.txt`: collection or parsing issues detected in the bundle.
 - `00_clusterroles.txt`: cluster role validation notes.
+- `00_gemini-review.md`: if your gemini APIKEY is populated gemini review of the diag.
 - `eck_nodes.txt`: worker/control-plane node info.
 - `eck_storageclasses.txt`: storage class summary.
 - `diagnostics/`: symlinks to Elasticsearch/Kibana/Agent diagnostics.
@@ -159,7 +162,7 @@ For most incidents, this is a practical reading order:
 
 ## Using `web.sh`
 
-### Usage
+### Web Usage
 
 ```bash
 web.sh [OPTIONS] [PATH]
