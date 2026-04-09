@@ -342,6 +342,72 @@
       color: var(--accent-primary);
     }
 
+    .top-right-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .git-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      border-radius: 9999px;
+      padding: 0.4rem 0.65rem;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      border: 1px solid var(--border-primary);
+      background: var(--bg-secondary);
+      color: var(--text-secondary);
+      max-width: min(56vw, 420px);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .git-badge span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .git-badge-ok {
+      border-color: color-mix(in srgb, var(--accent-primary) 42%, var(--border-primary) 58%);
+      background: color-mix(in srgb, var(--accent-dim) 70%, var(--bg-secondary) 30%);
+      color: var(--accent-primary);
+    }
+
+    .git-badge-update {
+      border-color: color-mix(in srgb, var(--warning) 45%, var(--border-primary) 55%);
+      background: color-mix(in srgb, var(--warning-dim) 72%, var(--bg-secondary) 28%);
+      color: var(--warning);
+    }
+
+    @media (max-width: 900px) {
+      .top-right-controls {
+        right: 0.75rem;
+        top: 0.75rem;
+      }
+
+      .git-badge {
+        max-width: 46vw;
+        font-size: 0.68rem;
+        padding: 0.35rem 0.55rem;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .top-right-controls {
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 0.35rem;
+      }
+
+      .git-badge {
+        max-width: 68vw;
+      }
+    }
+
     .table {
       width: 100%;
       border-collapse: collapse;

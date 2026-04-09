@@ -2667,6 +2667,9 @@ class ECKGlanceHandler(http.server.BaseHTTPRequestHandler):
             if path == 'bundles':
                 self.api_list_bundles()
 
+            elif path == 'status':
+                self.api_runtime_status()
+
             elif path == 'config':
                 self.api_runtime_config()
 
@@ -2940,6 +2943,45 @@ class ECKGlanceHandler(http.server.BaseHTTPRequestHandler):
             'uploadDir': UPLOAD_DIR,
             'hasGeminiApiKey': bool(GEMINI_API_KEY),
         })
+
+    def api_runtime_status(self):
+        git_status = {
+            'needsPull': False,
+            'changedFiles': [],
+        }
+
+        try:
+            if os.path.isdir(os.path.join(PROJECT_ROOT, '.git')):
+                subprocess.run(
+                    ['git', 'fetch', 'origin'],
+                    cwd=str(PROJECT_ROOT),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=10,
+                    check=False,
+                )
+                diff_proc = subprocess.run(
+                    ['git', 'diff', '--name-only', 'origin/main'],
+                    cwd=str(PROJECT_ROOT),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=5,
+                    check=False,
+                    text=True,
+                )
+                changed_files = [
+                    line.strip() for line in (diff_proc.stdout or '').splitlines() if line.strip()
+                ]
+                if changed_files:
+                    git_status = {
+                        'needsPull': True,
+                        'changedFiles': changed_files,
+                    }
+        except Exception:
+            # Ignore git errors when running outside a repository.
+            pass
+
+        self.send_json({'git': git_status})
 
     def api_resource_catalog(self):
         """GET /api/resource-catalog - canonical type maps and nav resource ordering."""

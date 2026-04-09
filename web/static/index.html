@@ -348,7 +348,7 @@
     const ThemeToggle = () => {
       const { theme, toggleTheme } = useTheme();
       return (
-        <div className="fixed top-4 right-4 z-50 theme-toggle">
+        <div className="theme-toggle">
           <button
             onClick={() => theme !== 'light' && toggleTheme()}
             className={theme === 'light' ? 'active' : ''}
@@ -366,6 +366,53 @@
         </div>
       );
     };
+
+    const GitStatusBadge = () => {
+      const [gitStatus, setGitStatus] = useState(null);
+
+      useEffect(() => {
+        let isMounted = true;
+        api.getStatus()
+          .then((status) => {
+            if (!isMounted) return;
+            setGitStatus(status?.git || { needsPull: false, changedFiles: [] });
+          })
+          .catch(() => {
+            if (!isMounted) return;
+            setGitStatus(null);
+          });
+
+        return () => {
+          isMounted = false;
+        };
+      }, []);
+
+      if (!gitStatus) return null;
+
+      const files = Array.isArray(gitStatus.changedFiles) ? gitStatus.changedFiles : [];
+      if (gitStatus.needsPull) {
+        return (
+          <div className="git-badge git-badge-update" title={`Updated files: ${files.join(', ')}`}>
+            <Icon name="alert" size={14} />
+            <span>Updates available - run git pull</span>
+          </div>
+        );
+      }
+
+      return (
+        <div className="git-badge git-badge-ok">
+          <Icon name="check" size={14} />
+          <span>Up to date</span>
+        </div>
+      );
+    };
+
+    const TopRightControls = () => (
+      <div className="top-right-controls fixed top-4 right-4 z-50">
+        <GitStatusBadge />
+        <ThemeToggle />
+      </div>
+    );
 
     // Status Badge Component
     const StatusBadge = ({ status }) => {
@@ -567,6 +614,10 @@
       },
       getConfig: async () => {
         const res = await fetch('/api/config');
+        return res.json();
+      },
+      getStatus: async () => {
+        const res = await fetch('/api/status');
         return res.json();
       },
       getResourceCatalog: async () => {
@@ -6048,7 +6099,7 @@
         <ErrorBoundary>
           <BrowserRouter>
             <App />
-            <ThemeToggle />
+            <TopRightControls />
           </BrowserRouter>
         </ErrorBoundary>
       </ThemeProvider>

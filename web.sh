@@ -57,6 +57,23 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 RESET='\033[0m'
 
+check_for_updates() {
+  if ! git rev-parse --git-dir &>/dev/null; then
+    return 0
+  fi
+
+  git fetch origin &>/dev/null || return 0
+
+  local changed_files
+  changed_files="$(git diff --name-only origin/main 2>/dev/null)"
+  if [[ -n "${changed_files}" ]]; then
+    echo -e "${YELLOW}Updates available for the following files:${RESET}"
+    echo "${changed_files}"
+    echo -e "${YELLOW}Please run ${BOLD}git pull${RESET}${YELLOW} to update.${RESET}"
+    echo ""
+  fi
+}
+
 # Help
 usage() {
   printf "%beck-glance web%b - ECK Diagnostics Web Viewer\n" "${BOLD}" "${RESET}"
@@ -128,6 +145,8 @@ if ! [[ "${PORT}" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
 fi
 
 # Prerequisites
+check_for_updates
+
 if ! command -v python3 &>/dev/null; then
   echo -e "${RED}ERROR: Python 3 is required but not found.${RESET}"
   echo ""

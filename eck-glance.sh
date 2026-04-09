@@ -217,9 +217,28 @@ log_warn() {
   echo -e "${YELLOW}[eck-glance] WARN:${RESET} $*" >&2
 }
 
+check_for_updates() {
+  if ! git rev-parse --git-dir &>/dev/null; then
+    return 0
+  fi
+
+  git fetch origin &>/dev/null || return 0
+
+  local changed_files
+  changed_files="$(git diff --name-only origin/main 2>/dev/null)"
+  if [[ -n "${changed_files}" ]]; then
+    log_warn "Updates available for the following files:"
+    echo "${changed_files}"
+    log_warn "Please run ${BOLD}git pull${RESET} to update."
+    echo ""
+  fi
+}
+
 # Validation
 
 # Required tools.
+check_for_updates
+
 for tool in jq column; do
   if ! command -v "${tool}" &>/dev/null; then
     log_error "'${tool}' is required but not found. Please install it."
