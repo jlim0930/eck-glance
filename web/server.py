@@ -1,17 +1,11 @@
 #!/usr/bin/env python3
 
-"""
-ECK Glance Web UI - Python HTTP Backend Server
-
-Serves both API routes and static files for the ECK Glance diagnostic viewer.
-Uses only Python stdlib (no external dependencies).
-"""
+"""Serve the ECK Glance API and static UI."""
 
 import argparse
 import base64
 import copy
 import datetime
-import email.parser
 import glob
 import gzip
 import http.server
@@ -33,15 +27,32 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-# ============================================================================
-# CONFIGURATION
-# ============================================================================
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-# Default TCP port; overridable with the --port CLI flag or the PORT environment variable
+from common.eck_shared import (
+    CLUSTER_RESOURCE_FILES,
+    GRAPH_LAYER_LABELS,
+    NAMESPACE_RESOURCE_FILES_DETAIL,
+    NAMESPACE_RESOURCE_FILES_SUMMARY,
+    NAMESPACE_NAV_TYPES,
+    RESOURCE_TYPE_ICONS,
+    TYPE_SINGULAR_TO_PLURAL,
+    analyze_managed_fields,
+    attach_node_analysis,
+    build_controllerrevision_analysis,
+    build_node_summary,
+    normalize_events,
+    discover_namespaces as shared_discover_namespaces,
+)
+
+# Configuration
+
+# Runtime defaults.
 DEFAULT_PORT = 3000
 
-# Persistent directory where browser-uploaded diagnostic bundles are stored and extracted.
-# Lives in /tmp so uploads do not survive server restarts across sessions.
+# Uploaded bundles live here.
 UPLOAD_DIR = os.path.expanduser(os.environ.get('ECK_GLANCE_UPLOAD_DIR', '/tmp/eck-glance-uploads'))
 DEFAULT_THEME = os.environ.get('ECK_GLANCE_DEFAULT_THEME', 'light').strip().lower()
 if DEFAULT_THEME not in ('light', 'dark'):
@@ -49,27 +60,66 @@ if DEFAULT_THEME not in ('light', 'dark'):
 GEMINI_API_KEY = os.environ.get('ECK_GLANCE_GEMINI_API_KEY', '')
 GEMINI_MODEL = os.environ.get('ECK_GLANCE_GEMINI_MODEL', 'gemini-2.0-flash')
 
-# In-memory cache for parsed JSON resource files. This avoids repeatedly
-# re-parsing very large diagnostics JSON on every page/API request.
+try:
+    MAX_UPLOAD_SIZE = int(os.environ.get('ECK_GLANCE_MAX_UPLOAD_SIZE', str(1024 * 1024 * 1024)))
+except ValueError:
+    MAX_UPLOAD_SIZE = 1024 * 1024 * 1024
+
+if MAX_UPLOAD_SIZE <= 0:
+    MAX_UPLOAD_SIZE = 1024 * 1024 * 1024
+
+# Cache parsed resource files.
 _ITEMS_CACHE = {}
 _ITEMS_CACHE_MAX = 64
 _ITEMS_CACHE_LOCK = threading.RLock()
 
 
-# ============================================================================
-# UTILITY FUNCTIONS
-# ============================================================================
+# Utilities
 
 def ensure_dir(path):
     os.makedirs(path, exist_ok=True)
 
 
 def safe_path_join(base, *parts):
-    path = os.path.realpath(os.path.join(base, *parts))
     base = os.path.realpath(base)
-    if not path.startswith(base):
+    path = os.path.realpath(os.path.join(base, *parts))
+    try:
+        if os.path.commonpath([base, path]) != base:
+            raise ValueError(f"Path traversal detected: {path}")
+    except ValueError:
         raise ValueError(f"Path traversal detected: {path}")
     return path
+
+
+def sanitize_bundle_name(filename):
+    raw_name = os.path.basename(str(filename or 'upload.zip'))
+    bundle_name = os.path.splitext(raw_name)[0].strip()
+    bundle_name = re.sub(r'[^A-Za-z0-9._-]+', '-', bundle_name).strip('._-')
+    return bundle_name or 'upload'
+
+
+def extract_zip_safely(zip_file, extract_dir):
+    top_dirs = set()
+
+    for member in zip_file.infolist():
+        target_path = safe_path_join(extract_dir, member.filename)
+        rel_path = os.path.relpath(target_path, extract_dir)
+
+        if rel_path not in ('', '.') and os.sep in rel_path:
+            top_dirs.add(rel_path.split(os.sep, 1)[0])
+
+        if member.is_dir():
+            os.makedirs(target_path, exist_ok=True)
+            continue
+
+        parent_dir = os.path.dirname(target_path)
+        if parent_dir:
+            os.makedirs(parent_dir, exist_ok=True)
+
+        with zip_file.open(member, 'r') as src, open(target_path, 'wb') as dst:
+            shutil.copyfileobj(src, dst)
+
+    return top_dirs
 
 
 def get_items(filepath):
@@ -145,62 +195,8 @@ def get_bundle_path(bundles_map, bundle_id):
 
 
 def discover_namespaces(bundle_path):
-    """Discover namespaces in both modern and legacy diagnostic layouts.
-
-    Modern layout stores resources under per-namespace directories
-    (e.g. <bundle>/default/pods.json).
-
-    Some older bundles flatten a single namespace at bundle root
-    (e.g. <bundle>/pods.json, <bundle>/events.json, <bundle>/pod/*).
-    """
-    namespaces = set()
-    for item in os.listdir(bundle_path):
-        item_path = os.path.join(bundle_path, item)
-        if os.path.isdir(item_path) and item not in [
-            'elasticsearch', 'kibana', 'beat', 'agent', 'apmserver',
-            'enterprisesearch', 'elasticmapsserver', 'logstash', 'pod'
-        ]:
-            # Check if it looks like a namespace (has JSON files)
-            if any(f.endswith('.json') for f in os.listdir(item_path) if os.path.isfile(os.path.join(item_path, f))):
-                namespaces.add(item)
-
-    if namespaces:
-        return sorted(list(namespaces))
-
-    # Legacy flat layout fallback: infer namespace(s) from root-level resources.
-    root_resource_files = [
-        'pods.json', 'events.json', 'elasticsearch.json', 'kibana.json',
-        'agent.json', 'beat.json', 'apmserver.json', 'services.json',
-        'deployments.json', 'statefulsets.json', 'daemonsets.json',
-        'replicasets.json', 'endpoints.json', 'configmaps.json',
-        'secrets.json', 'persistentvolumeclaims.json', 'persistentvolumes.json',
-    ]
-    found_root_resources = any(os.path.exists(os.path.join(bundle_path, name)) for name in root_resource_files)
-    if not found_root_resources:
-        return []
-
-    inferred = set()
-
-    def _add_namespace(ns_value):
-        if ns_value is None:
-            return
-        ns_text = str(ns_value).strip()
-        if ns_text:
-            inferred.add(ns_text)
-
-    for filename in root_resource_files:
-        items = get_items(os.path.join(bundle_path, filename))
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            _add_namespace(item.get('metadata', {}).get('namespace'))
-            _add_namespace(item.get('involvedObject', {}).get('namespace'))
-
-    # Final fallback for very sparse dumps where namespace metadata is absent.
-    if not inferred and os.path.isdir(os.path.join(bundle_path, 'pod')):
-        inferred.add('default')
-
-    return sorted(list(inferred))
+    """Discover namespaces for modern and legacy diagnostic layouts."""
+    return shared_discover_namespaces(bundle_path)
 
 
 def get_namespace_dir(bundle_path, namespace):
@@ -240,41 +236,7 @@ def find_pod_logs(bundle_path, namespace):
 
 def parse_node_info(node):
     """Extract relevant fields from K8s node object."""
-    if not isinstance(node, dict):
-        return None
-
-    metadata = node.get('metadata', {})
-    status = node.get('status', {})
-    spec = node.get('spec', {})
-
-    # Node roles are encoded as labels with the prefix 'node-role.kubernetes.io/'
-    # e.g. node-role.kubernetes.io/control-plane='' → role 'control-plane'
-    labels = metadata.get('labels', {})
-    roles = [k.replace('node-role.kubernetes.io/', '') for k in labels.keys()
-             if k.startswith('node-role.kubernetes.io/')]
-    if not roles:
-        roles = []
-
-    # Get condition statuses
-    conditions = status.get('conditions', [])
-    condition_map = {c.get('type'): c.get('status') for c in conditions if isinstance(c, dict)}
-    ready = condition_map.get('Ready') == 'True'
-
-    # Get node info
-    node_info = status.get('nodeInfo', {})
-
-    # Get capacity
-    capacity = status.get('capacity', {})
-
-    return {
-        'name': metadata.get('name'),
-        'roles': roles,
-        'status': 'Ready' if ready else 'NotReady',
-        'version': node_info.get('kubeletVersion'),
-        'os': f"{node_info.get('osImage', '')} {node_info.get('kernelVersion', '')}".strip(),
-        'cpu': capacity.get('cpu'),
-        'memory': capacity.get('memory'),
-    }
+    return build_node_summary(node)
 
 
 def summarize_bundle_for_review(bundle_path):
@@ -2502,12 +2464,29 @@ def enrich_resource_detail(bundle_path, namespace, resource_type, item):
         if params:
             item['_parameters'] = params
 
+    # ControllerRevision enrichment: build ordered revision timeline and deltas by owner.
+    if resource_type == 'controllerrevisions' and namespace:
+        ns_path = get_namespace_dir(bundle_path, namespace)
+        revisions_path = os.path.join(ns_path, 'controllerrevisions.json')
+        all_revisions = get_items(revisions_path)
+        current_name = str(item.get('metadata', {}).get('name', '') or '')
+        analysis = build_controllerrevision_analysis(all_revisions, current_name=current_name)
+        item['_controllerRevisionAnalysis'] = analysis
+
+    # managedFields ownership analysis
+    mf_findings = analyze_managed_fields(item)
+    if mf_findings:
+        item['_managedFieldsFindings'] = mf_findings
+
     return item
 
 
 def parse_multipart(handler):
     content_type = handler.headers.get('Content-Type', '')
-    content_length = int(handler.headers.get('Content-Length', 0))
+    try:
+        content_length = int(handler.headers.get('Content-Length', 0))
+    except (TypeError, ValueError):
+        return {}
 
     if content_length == 0:
         return {}
@@ -2618,21 +2597,17 @@ def scan_bundles(bundle_path, preload_path=None):
     return bundles_map
 
 
-# ============================================================================
-# REQUEST HANDLER
-# ============================================================================
+# Request handler
 
 class ECKGlanceHandler(http.server.BaseHTTPRequestHandler):
 
-    # Registry of known bundles: {bundle_id: absolute_path}.
-    # Updated in-place on upload/delete so all in-flight request threads see
-    # the current state via the shared class reference.
+    # Shared bundle registry.
     bundles_map = {}
 
-    # Absolute path to the 'static/' directory with the compiled frontend assets.
+    # Static asset root.
     static_dir = None
 
-    # Optional CLI-supplied diagnostic path registered as a preloaded bundle.
+    # Optional preloaded bundle.
     preload_path = None
 
     def do_GET(self):
@@ -2640,8 +2615,7 @@ class ECKGlanceHandler(http.server.BaseHTTPRequestHandler):
             path = self.path
             query = {}
 
-            # Parse query string; urllib returns value lists, so flatten
-            # single-element lists to bare strings for simpler downstream use
+            # Flatten single-value query params.
             if '?' in path:
                 path, query_str = path.split('?', 1)
                 query = urllib.parse.parse_qs(query_str)
@@ -2696,6 +2670,9 @@ class ECKGlanceHandler(http.server.BaseHTTPRequestHandler):
             elif path == 'config':
                 self.api_runtime_config()
 
+            elif path == 'resource-catalog':
+                self.api_resource_catalog()
+
             elif len(parts) >= 2 and parts[0] == 'bundle':
                 bundle_id = parts[1]
 
@@ -2706,6 +2683,10 @@ class ECKGlanceHandler(http.server.BaseHTTPRequestHandler):
                 elif len(parts) == 3 and parts[2] == 'overview':
                     # /api/bundle/:id/overview
                     self.api_bundle_overview(bundle_id)
+
+                elif len(parts) == 3 and parts[2] == 'eck':
+                    # /api/bundle/:id/eck
+                    self.api_bundle_eck_info(bundle_id)
 
                 elif len(parts) == 3 and parts[2] == 'namespaces':
                     # /api/bundle/:id/namespaces
@@ -2920,9 +2901,7 @@ class ECKGlanceHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass
 
-    # ========================================================================
-    # API ENDPOINTS
-    # ========================================================================
+    # API endpoints
 
     def api_list_bundles(self):
         bundles = []
@@ -2960,6 +2939,18 @@ class ECKGlanceHandler(http.server.BaseHTTPRequestHandler):
             'defaultTheme': DEFAULT_THEME,
             'uploadDir': UPLOAD_DIR,
             'hasGeminiApiKey': bool(GEMINI_API_KEY),
+        })
+
+    def api_resource_catalog(self):
+        """GET /api/resource-catalog - canonical type maps and nav resource ordering."""
+        self.send_json({
+            'typeSingularToPlural': TYPE_SINGULAR_TO_PLURAL,
+            'namespaceNavTypes': NAMESPACE_NAV_TYPES,
+            'namespaceResourceFilesSummary': NAMESPACE_RESOURCE_FILES_SUMMARY,
+            'namespaceResourceFilesDetail': NAMESPACE_RESOURCE_FILES_DETAIL,
+            'clusterResourceFiles': CLUSTER_RESOURCE_FILES,
+            'graphLayerLabels': GRAPH_LAYER_LABELS,
+            'resourceTypeIcons': RESOURCE_TYPE_ICONS,
         })
 
     def _read_json_body(self):
@@ -3467,6 +3458,289 @@ class ECKGlanceHandler(http.server.BaseHTTPRequestHandler):
         namespaces = discover_namespaces(bundle_path)
         self.send_json(namespaces)
 
+    # ECK operator / config / CRD / license info
+
+    def api_bundle_eck_info(self, bundle_id):
+        """GET /api/bundle/:id/eck - ECK operator info, config, CRDs, and license."""
+        bundle_path = get_bundle_path(self.bundles_map, bundle_id)
+        if not bundle_path:
+            self.send_json_error("Bundle not found", 404)
+            return
+
+        result = {
+            'operator': self._eck_operator_info(bundle_path),
+            'config':   self._eck_config(bundle_path),
+            'crds':     self._eck_crds(bundle_path),
+            'license':  self._eck_license(bundle_path),
+        }
+        self.send_json(result)
+
+    def _parse_flat_yaml(self, content):
+        """Parse a flat YAML key: value file into a dict."""
+        result = {}
+        for line in content.splitlines():
+            line = line.strip()
+            if not line or line.startswith('#') or ':' not in line:
+                continue
+            key, _, val = line.partition(':')
+            key = key.strip()
+            val = val.strip()
+            # Strip surrounding quotes
+            if len(val) >= 2 and val[0] in ('"', "'") and val[-1] == val[0]:
+                val = val[1:-1]
+            # Coerce booleans and numbers
+            if val.lower() == 'true':
+                val = True
+            elif val.lower() == 'false':
+                val = False
+            else:
+                try:
+                    val = int(val)
+                except ValueError:
+                    try:
+                        val = float(val)
+                    except ValueError:
+                        pass
+            result[key] = val
+        return result
+
+    def _eck_operator_info(self, bundle_path):
+        """Return ECK operator version, image, namespace, and helm metadata."""
+        info = {}
+        namespaces = discover_namespaces(bundle_path)
+
+        # Prefer StatefulSet labels (most reliable version source)
+        for ns in namespaces:
+            ns_path = get_namespace_dir(bundle_path, ns)
+            for item in get_items(os.path.join(ns_path, 'statefulsets.json')):
+                if not isinstance(item, dict):
+                    continue
+                if item.get('metadata', {}).get('name') != 'elastic-operator':
+                    continue
+                labels = item.get('metadata', {}).get('labels', {})
+                info['version']      = labels.get('app.kubernetes.io/version', '')
+                info['helmChart']    = labels.get('helm.sh/chart', '')
+                info['managedBy']    = labels.get('app.kubernetes.io/managed-by', '')
+                info['namespace']    = ns
+                conts = (item.get('spec', {})
+                             .get('template', {})
+                             .get('spec', {})
+                             .get('containers', []))
+                if conts:
+                    info['image'] = conts[0].get('image', '')
+                    if not info['version'] and ':' in info.get('image', ''):
+                        info['version'] = info['image'].rsplit(':', 1)[-1]
+                break
+            if info.get('version'):
+                break
+
+        # Fallback: operator pod image
+        if not info.get('version'):
+            for ns in namespaces:
+                ns_path = get_namespace_dir(bundle_path, ns)
+                for item in get_items(os.path.join(ns_path, 'pods.json')):
+                    if not isinstance(item, dict):
+                        continue
+                    if not item.get('metadata', {}).get('name', '').startswith('elastic-operator-'):
+                        continue
+                    conts = item.get('spec', {}).get('containers', [])
+                    if conts:
+                        img = conts[0].get('image', '')
+                        info.setdefault('image', img)
+                        if ':' in img:
+                            info['version'] = img.rsplit(':', 1)[-1]
+                        info.setdefault('namespace', ns)
+                    break
+                if info.get('version'):
+                    break
+
+        # Fallback: eck-diagnostics.log "ECK version is X"
+        if not info.get('version'):
+            log_path = os.path.join(bundle_path, 'eck-diagnostics.log')
+            if os.path.exists(log_path):
+                try:
+                    with open(log_path, 'r') as fh:
+                        for line in fh:
+                            m = re.search(r'ECK version is\s+(\S+)', line)
+                            if m:
+                                info['version'] = m.group(1)
+                                break
+                except Exception:
+                    pass
+
+        return info
+
+    def _eck_config(self, bundle_path):
+        """Return parsed eck.yaml settings from the elastic-operator ConfigMap."""
+        for ns in discover_namespaces(bundle_path):
+            ns_path = get_namespace_dir(bundle_path, ns)
+            for item in get_items(os.path.join(ns_path, 'configmaps.json')):
+                if not isinstance(item, dict):
+                    continue
+                if item.get('metadata', {}).get('name') != 'elastic-operator':
+                    continue
+                data = item.get('data', {})
+                yaml_text = data.get('eck.yaml') or data.get('eck.yml', '')
+                if yaml_text:
+                    return self._parse_flat_yaml(yaml_text)
+        return {}
+
+    def _eck_crds(self, bundle_path):
+        """Detect installed ECK CRD types and their instance counts."""
+        crd_defs = [
+            ('Elasticsearch',     'elasticsearch.k8s.elastic.co',           'elasticsearch.json'),
+            ('Kibana',            'kibana.k8s.elastic.co',                  'kibana.json'),
+            ('Beat',              'beat.k8s.elastic.co',                    'beat.json'),
+            ('Agent',             'agent.k8s.elastic.co',                   'agent.json'),
+            ('ApmServer',         'apm.k8s.elastic.co',                     'apmserver.json'),
+            ('EnterpriseSearch',  'enterprisesearch.k8s.elastic.co',        'enterprisesearch.json'),
+            ('ElasticMapsServer', 'maps.k8s.elastic.co',                    'elasticmapsserver.json'),
+            ('Logstash',          'logstash.k8s.elastic.co',                'logstash.json'),
+            ('StackConfigPolicy', 'stackconfigpolicy.k8s.elastic.co',       'stackconfigpolicy.json'),
+        ]
+        namespaces = discover_namespaces(bundle_path)
+        crds = []
+        for kind, api_group, filename in crd_defs:
+            count = 0
+            api_versions = set()
+            instances = []
+            for ns in namespaces:
+                ns_path = get_namespace_dir(bundle_path, ns)
+                for item in get_items(os.path.join(ns_path, filename)):
+                    if not isinstance(item, dict):
+                        continue
+                    count += 1
+                    av = item.get('apiVersion', '')
+                    if av:
+                        api_versions.add(av)
+                    meta   = item.get('metadata', {})
+                    status = item.get('status', {})
+                    instances.append({
+                        'name':      meta.get('name', ''),
+                        'namespace': ns,
+                        'version':   status.get('version', ''),
+                        'health':    status.get('health', ''),
+                        'phase':     status.get('phase', ''),
+                    })
+            crds.append({
+                'kind':        kind,
+                'apiGroup':    api_group,
+                'apiVersions': sorted(api_versions),
+                'count':       count,
+                'instances':   instances,
+            })
+        return crds
+
+    def _eck_license(self, bundle_path):
+        """Extract ECK license information from secrets across all namespaces."""
+        result = {
+            'type':    None,
+            'status':  None,
+            'expiry':  None,
+            'uid':     None,
+            'secrets': [],
+            'usage':   {},
+        }
+        namespaces = discover_namespaces(bundle_path)
+        for ns in namespaces:
+            ns_path = get_namespace_dir(bundle_path, ns)
+            for item in get_items(os.path.join(ns_path, 'secrets.json')):
+                if not isinstance(item, dict):
+                    continue
+                name   = item.get('metadata', {}).get('name', '')
+                labels = item.get('metadata', {}).get('labels', {})
+                stype  = item.get('type', '')
+                label_str = ' '.join(labels.keys()).lower()
+                is_license = (
+                    'license' in name.lower()
+                    or 'license' in stype.lower()
+                    or 'license' in label_str
+                    or 'k8s.elastic.co/license' in stype
+                )
+                if not is_license:
+                    continue
+                entry = {
+                    'name':      name,
+                    'namespace': ns,
+                    'type':      stype,
+                    'scope':     labels.get('license.k8s.elastic.co/scope', ''),
+                }
+                result['secrets'].append(entry)
+                # Decode license payload if present (base64-encoded JSON)
+                for _key, dv in item.get('data', {}).items():
+                    if not dv or not isinstance(dv, str):
+                        continue
+                    try:
+                        decoded = base64.b64decode(dv).decode('utf-8')
+                        lic_data = json.loads(decoded)
+                        if isinstance(lic_data, dict):
+                            lic_obj = lic_data.get('license', lic_data)
+                            result['type']   = result['type']   or lic_obj.get('type')
+                            result['status'] = result['status'] or lic_obj.get('status')
+                            result['expiry'] = result['expiry'] or lic_obj.get('expiry_date_in_millis')
+                            result['uid']    = result['uid']    or lic_obj.get('uid')
+                    except Exception:
+                        pass
+        result['usage'] = self._eck_license_usage(bundle_path)
+        return result
+
+    def _eck_license_usage(self, bundle_path):
+        """Extract usage metrics from the elastic-licensing ConfigMap."""
+        usage = {
+            'found': False,
+            'namespace': None,
+            'updatedAt': None,
+            'licenseLevel': None,
+            'eru': {
+                'used': None,
+                'max': None,
+            },
+            'managedMemory': {
+                'human': None,
+                'bytes': None,
+            },
+            'raw': {},
+        }
+
+        for ns in discover_namespaces(bundle_path):
+            ns_path = get_namespace_dir(bundle_path, ns)
+            for item in get_items(os.path.join(ns_path, 'configmaps.json')):
+                if not isinstance(item, dict):
+                    continue
+                if item.get('metadata', {}).get('name') != 'elastic-licensing':
+                    continue
+
+                usage['found'] = True
+                usage['namespace'] = ns
+                data = item.get('data', {}) or {}
+                usage['raw'] = data
+
+                # Core fields documented by ECK license usage docs.
+                usage['licenseLevel'] = data.get('eck_license_level')
+                usage['updatedAt'] = data.get('timestamp')
+
+                eru_used = data.get('enterprise_resource_units')
+                eru_max = data.get('max_enterprise_resource_units')
+                if isinstance(eru_used, str) and eru_used.isdigit():
+                    usage['eru']['used'] = int(eru_used)
+                else:
+                    usage['eru']['used'] = eru_used
+                if isinstance(eru_max, str) and eru_max.isdigit():
+                    usage['eru']['max'] = int(eru_max)
+                else:
+                    usage['eru']['max'] = eru_max
+
+                usage['managedMemory']['human'] = data.get('total_managed_memory')
+                mm_bytes = data.get('total_managed_memory_bytes')
+                if isinstance(mm_bytes, str) and mm_bytes.isdigit():
+                    usage['managedMemory']['bytes'] = int(mm_bytes)
+                else:
+                    usage['managedMemory']['bytes'] = mm_bytes
+
+                return usage
+
+        return usage
+
     def api_bundle_nodes(self, bundle_id):
         """GET /api/bundle/:id/nodes - Get nodes."""
         bundle_path = get_bundle_path(self.bundles_map, bundle_id)
@@ -3475,7 +3749,7 @@ class ECKGlanceHandler(http.server.BaseHTTPRequestHandler):
             return
 
         nodes_path = os.path.join(bundle_path, 'nodes.json')
-        items = get_items(nodes_path)
+        items = [attach_node_analysis(item) for item in get_items(nodes_path)]
         self.send_json(items)
 
     def api_bundle_storageclasses(self, bundle_id):
@@ -3498,7 +3772,7 @@ class ECKGlanceHandler(http.server.BaseHTTPRequestHandler):
 
         result = {
             'storageClasses': get_items(os.path.join(bundle_path, 'storageclasses.json')),
-            'nodes': get_items(os.path.join(bundle_path, 'nodes.json')),
+            'nodes': [attach_node_analysis(item) for item in get_items(os.path.join(bundle_path, 'nodes.json'))],
             'podSecurityPolicies': get_items(os.path.join(bundle_path, 'podsecuritypolicies.json')),
             'clusterRoles': self._read_text_file(os.path.join(bundle_path, 'clusterroles.txt')),
             'clusterRoleBindings': self._read_text_file(os.path.join(bundle_path, 'clusterrolebindings.txt')),
@@ -3512,11 +3786,7 @@ class ECKGlanceHandler(http.server.BaseHTTPRequestHandler):
             self.send_json_error("Bundle not found", 404)
             return
 
-        type_map = {
-            'storageclasses': 'storageclasses.json',
-            'nodes': 'nodes.json',
-            'podsecuritypolicies': 'podsecuritypolicies.json',
-        }
+        type_map = CLUSTER_RESOURCE_FILES
 
         filename = type_map.get(resource_type)
         if not filename:
@@ -3526,6 +3796,8 @@ class ECKGlanceHandler(http.server.BaseHTTPRequestHandler):
         filepath = os.path.join(bundle_path, filename)
         item = find_item(filepath, item_name)
         if item:
+            if resource_type == 'nodes':
+                item = attach_node_analysis(item)
             enrich_resource_detail(bundle_path, '', resource_type, item)
             self.send_json(item)
         else:
@@ -3554,29 +3826,7 @@ class ECKGlanceHandler(http.server.BaseHTTPRequestHandler):
             self.send_json_error("Namespace not found", 404)
             return
 
-        type_map = {
-            'elasticsearch': 'elasticsearch.json',
-            'kibana': 'kibana.json',
-            'beat': 'beat.json',
-            'agent': 'agent.json',
-            'apmserver': 'apmserver.json',
-            'enterprisesearch': 'enterprisesearch.json',
-            'elasticmapsserver': 'elasticmapsserver.json',
-            'logstash': 'logstash.json',
-            'pods': 'pods.json',
-            'statefulsets': 'statefulsets.json',
-            'deployments': 'deployments.json',
-            'daemonsets': 'daemonsets.json',
-            'replicasets': 'replicasets.json',
-            'services': 'services.json',
-            'configmaps': 'configmaps.json',
-            'secrets': 'secrets.json',
-            'persistentvolumeclaims': 'persistentvolumeclaims.json',
-            'persistentvolumes': 'persistentvolumes.json',
-            'endpoints': 'endpoints.json',
-            'controllerrevisions': 'controllerrevisions.json',
-            'serviceaccounts': 'serviceaccount.json',
-        }
+        type_map = NAMESPACE_RESOURCE_FILES_SUMMARY
 
         result = {}
 
@@ -3646,31 +3896,7 @@ class ECKGlanceHandler(http.server.BaseHTTPRequestHandler):
             return
 
         # Map type to filename
-        type_map = {
-            'elasticsearch': 'elasticsearch.json',
-            'kibana': 'kibana.json',
-            'beat': 'beat.json',
-            'agent': 'agent.json',
-            'apmserver': 'apmserver.json',
-            'enterprisesearch': 'enterprisesearch.json',
-            'elasticmapsserver': 'elasticmapsserver.json',
-            'logstash': 'logstash.json',
-            'pods': 'pods.json',
-            'statefulsets': 'statefulsets.json',
-            'deployments': 'deployments.json',
-            'daemonsets': 'daemonsets.json',
-            'replicasets': 'replicasets.json',
-            'services': 'services.json',
-            'configmaps': 'configmaps.json',
-            'secrets': 'secrets.json',
-            'persistentvolumeclaims': 'persistentvolumeclaims.json',
-            'persistentvolumes': 'persistentvolumes.json',
-            'endpoints': 'endpoints.json',
-            'controllerrevisions': 'controllerrevisions.json',
-            'serviceaccounts': 'serviceaccount.json',
-            'networkpolicies': 'networkpolicies.json',
-            'storageclasses': 'storageclasses.json',
-        }
+        type_map = NAMESPACE_RESOURCE_FILES_DETAIL
 
         filename = type_map.get(resource_type)
         if not filename:
@@ -3705,6 +3931,21 @@ class ECKGlanceHandler(http.server.BaseHTTPRequestHandler):
         else:
             # Get all items
             items = get_items(filepath)
+
+            if resource_type == 'controllerrevisions' and isinstance(items, list):
+                def _cr_sort_key(entry):
+                    if not isinstance(entry, dict):
+                        return (-1, '', '')
+                    revision = entry.get('revision')
+                    try:
+                        rev_num = int(revision)
+                    except Exception:
+                        rev_num = -1
+                    created = str(entry.get('metadata', {}).get('creationTimestamp', '') or '')
+                    name = str(entry.get('metadata', {}).get('name', '') or '')
+                    return (rev_num, created, name)
+
+                items = sorted(items, key=_cr_sort_key)
 
             # For endpoints, ensure subsets field is included in all items
             if resource_type == 'endpoints' and isinstance(items, list):
@@ -3742,38 +3983,7 @@ class ECKGlanceHandler(http.server.BaseHTTPRequestHandler):
         ns_path = get_namespace_dir(bundle_path, namespace)
         events_path = os.path.join(ns_path, 'events.json')
         events = get_items(events_path)
-
-        # Convert and sort events
-        result = []
-        for event in events:
-            if isinstance(event, dict):
-                metadata = event.get('metadata', {})
-                involved_obj = event.get('involvedObject', {})
-                source = event.get('source', {})
-                event_type = event.get('type', 'Normal')
-
-                # Determine if this is an error type event
-                is_error = event_type not in ['Normal', 'Warning']
-
-                result.append({
-                    'timestamp': event.get('lastTimestamp'),
-                    'type': event_type,
-                    'reason': event.get('reason'),
-                    'kind': involved_obj.get('kind'),
-                    'name': involved_obj.get('name'),
-                    'namespace': involved_obj.get('namespace'),
-                    'message': event.get('message'),
-                    'count': event.get('count'),
-                    'firstTimestamp': event.get('firstTimestamp'),
-                    'lastTimestamp': event.get('lastTimestamp'),
-                    'source': source.get('component'),
-                    'errorCount': 1 if is_error else 0,
-                })
-
-        # Sort by lastTimestamp descending
-        result.sort(key=lambda e: e.get('lastTimestamp') or e.get('timestamp') or '', reverse=True)
-
-        self.send_json(result)
+        self.send_json(normalize_events(events))
 
     def api_resource_events(self, bundle_id, namespace, resource_name):
         """GET /api/bundle/:id/ns/:ns/events/:name - Get events for specific resource."""
@@ -3785,39 +3995,7 @@ class ECKGlanceHandler(http.server.BaseHTTPRequestHandler):
         ns_path = get_namespace_dir(bundle_path, namespace)
         events_path = os.path.join(ns_path, 'events.json')
         events = get_items(events_path)
-
-        # Filter events matching the resource name
-        result = []
-        for event in events:
-            if isinstance(event, dict):
-                involved_obj = event.get('involvedObject', {})
-                if involved_obj.get('name') == resource_name:
-                    metadata = event.get('metadata', {})
-                    source = event.get('source', {})
-                    event_type = event.get('type', 'Normal')
-
-                    # Determine if this is an error type event
-                    is_error = event_type not in ['Normal', 'Warning']
-
-                    result.append({
-                        'timestamp': event.get('lastTimestamp'),
-                        'type': event_type,
-                        'reason': event.get('reason'),
-                        'kind': involved_obj.get('kind'),
-                        'name': involved_obj.get('name'),
-                        'namespace': involved_obj.get('namespace'),
-                        'message': event.get('message'),
-                        'count': event.get('count'),
-                        'firstTimestamp': event.get('firstTimestamp'),
-                        'lastTimestamp': event.get('lastTimestamp'),
-                        'source': source.get('component'),
-                        'errorCount': 1 if is_error else 0,
-                    })
-
-        # Sort by lastTimestamp descending
-        result.sort(key=lambda e: e.get('lastTimestamp') or e.get('timestamp') or '', reverse=True)
-
-        self.send_json(result)
+        self.send_json(normalize_events(events, resource_name=resource_name))
 
     def api_namespace_relationships(self, bundle_id, namespace):
         """GET /api/bundle/:id/ns/:ns/relationships - Get resource relationships."""
@@ -4350,6 +4528,27 @@ class ECKGlanceHandler(http.server.BaseHTTPRequestHandler):
     def api_upload(self):
         """POST /api/upload - Upload and extract diagnostic bundle."""
         try:
+            try:
+                content_length = int(self.headers.get('Content-Length', 0))
+            except (TypeError, ValueError):
+                self.send_json_error("Invalid Content-Length header", 400)
+                return
+
+            if content_length <= 0:
+                self.send_json_error("Empty upload", 400)
+                return
+
+            if content_length > MAX_UPLOAD_SIZE:
+                self.send_json_error(
+                    (
+                        f"Upload exceeds maximum size of {MAX_UPLOAD_SIZE} bytes. "
+                        "If the diagnostics zip is too large, unzip it into a directory "
+                        "and launch the viewer directly with: ./web.sh /path/to/eck-diagnostics"
+                    ),
+                    413,
+                )
+                return
+
             # Parse multipart form
             fields = parse_multipart(self)
 
@@ -4376,21 +4575,13 @@ class ECKGlanceHandler(http.server.BaseHTTPRequestHandler):
             try:
                 with zipfile.ZipFile(temp_zip, 'r') as zf:
                     # Use the original filename (without .zip) as directory name
-                    zip_name = os.path.splitext(original_filename)[0] if original_filename else 'upload'
+                    zip_name = sanitize_bundle_name(original_filename)
 
                     # Try to extract
-                    extract_dir = os.path.join(UPLOAD_DIR, zip_name)
+                    extract_dir = safe_path_join(UPLOAD_DIR, zip_name)
                     os.makedirs(extract_dir, exist_ok=True)
 
-                    # Check if zip has single top-level directory
-                    namelist = zf.namelist()
-                    top_dirs = set()
-                    for name in namelist:
-                        parts = name.split('/')
-                        if len(parts) > 1:
-                            top_dirs.add(parts[0])
-
-                    zf.extractall(extract_dir)
+                    top_dirs = extract_zip_safely(zf, extract_dir)
 
                     # Zip files often wrap all content inside one top-level directory
                     # (e.g. eck-diagnostics-2024-01-01.zip → eck-diagnostics-2024-01-01/...).
@@ -4454,71 +4645,51 @@ class ECKGlanceHandler(http.server.BaseHTTPRequestHandler):
             self.send_json_error(str(e), 500)
 
 
-# ============================================================================
-# THREADING SERVER
-# ============================================================================
+# Threading server
 
 class ThreadingHTTPServer(http.server.HTTPServer):
-    """
-    HTTP server that handles each request in a dedicated daemon thread.
-
-    daemon_threads = True
-        Worker threads are automatically terminated when the main thread exits,
-        preventing the process from hanging on Ctrl-C even when long-running
-        requests (e.g. large log reads) are in flight.
-
-    allow_reuse_address = True
-        Sets SO_REUSEADDR on the listening socket so the server can bind
-        immediately after a restart without waiting for the OS TIME_WAIT
-        period (~60 s) to expire on the previous socket.
-    """
+    """HTTP server with daemon workers and socket reuse."""
 
     daemon_threads = True
     allow_reuse_address = True
 
 
-# ============================================================================
-# MAIN
-# ============================================================================
+# Main
 
 def main():
-    """
-    Parse CLI arguments, configure the request handler, and start the HTTP server.
-
-    Port resolution order: --port flag > PORT env var > DEFAULT_PORT (3000).
-
-    Static file directory resolution:
-      1. <script_dir>/static/  – expected location for a normal project layout
-      2. <script_dir>/         – fallback for flat layouts or development runs
-
-    ECKGlanceHandler class attributes are set here once, before the server starts
-    accepting connections, making them visible to every spawned request thread.
-    """
+    """Parse CLI args and start the HTTP server."""
     parser = argparse.ArgumentParser(description='ECK Glance Web UI Backend')
-    parser.add_argument('--port', type=int, default=DEFAULT_PORT, help=f'Port to listen on (default: {DEFAULT_PORT})')
+    parser.add_argument('--port', type=int, default=None, help=f'Port to listen on (default: {DEFAULT_PORT})')
     parser.add_argument('path', nargs='?', default=None, help='Path to diagnostic bundle or directory')
 
     args = parser.parse_args()
 
-    # --port flag takes first priority; fall back to PORT env var then the default
-    port = args.port or int(os.environ.get('PORT', DEFAULT_PORT))
+    # Resolve the runtime port.
+    try:
+        port = args.port if args.port is not None else int(os.environ.get('PORT', DEFAULT_PORT))
+    except ValueError:
+        parser.error('PORT must be an integer')
+
+    if port < 1 or port > 65535:
+        parser.error('PORT must be between 1 and 65535')
+
     preload_path = args.path
 
-    # Resolve static assets directory relative to this script's own location
+    # Resolve static assets.
     static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
     if not os.path.exists(static_dir):
-        # Fallback: treat the script's directory as the static root
+        # Fall back to the script directory.
         static_dir = os.path.dirname(os.path.abspath(__file__))
 
-    # Configure class-level attributes shared across all request handler instances
+    # Share runtime state with handlers.
     ECKGlanceHandler.static_dir = static_dir
     ECKGlanceHandler.preload_path = preload_path
     ECKGlanceHandler.bundles_map = scan_bundles(UPLOAD_DIR, preload_path)
 
-    # Bind the server socket and create the ThreadingHTTPServer instance
+    # Create the HTTP server.
     server = ThreadingHTTPServer(('0.0.0.0', port), ECKGlanceHandler)
 
-    # Print startup banner
+    # Startup banner.
     print(f"\n{'='*60}")
     print(f"ECK Glance Web UI Backend")
     print(f"{'='*60}")
@@ -4533,8 +4704,7 @@ def main():
     print(f"\nPress Ctrl+C to stop")
     print(f"{'='*60}\n")
 
-    # Register SIGINT handler so Ctrl-C triggers a clean server.shutdown() rather
-    # than an abrupt KeyboardInterrupt that may leave connections in an undefined state
+    # Stop cleanly on Ctrl-C.
     def signal_handler(signum, frame):
         """Handle Ctrl-C (SIGINT) by shutting down the HTTP server gracefully."""
         print('\n\nShutting down...')

@@ -1,1 +1,4 @@
 config
+common/__pycache__
+web/__pycache__
+web/static/__pycache__

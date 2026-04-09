@@ -1,23 +1,17 @@
 #!/usr/bin/env bash
-# eck-glance.sh - ECK Diagnostics Human-Readable Parser
-# Parses eck-diagnostics JSON files into kubectl describe-like output
-# https://github.com/jlim0930/eck-glance
-#
-# Usage: eck-glance.sh [OPTIONS] [path-to-eck-diagnostics]
-#   If no path given, uses current directory.
+# Parse eck-diagnostics output into readable reports.
 
 set -uo pipefail
-# Note: we intentionally do NOT use set -e because jq may return non-zero on
-# partial/missing data (which is expected with varied diagnostic bundles)
+# Avoid set -e because partial bundles can produce expected jq failures.
 
-VERSION="2.1.0"
+VERSION="2.0.0"
 
-# ==============================================================================
-# SCRIPT DIRECTORY & LIBRARY
-# ==============================================================================
+# Setup
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LIB_FILE="${SCRIPT_DIR}/eck-lib.sh"
+SHARED_HELPER="${SCRIPT_DIR}/common/eck_shared.py"
+CONFIG_FILE="${SCRIPT_DIR}/config"
 
 if [[ ! -f "${LIB_FILE}" ]]; then
   echo "ERROR: Cannot find eck-lib.sh at ${LIB_FILE}"
@@ -25,15 +19,41 @@ if [[ ! -f "${LIB_FILE}" ]]; then
   exit 1
 fi
 
+if [[ ! -f "${SHARED_HELPER}" ]]; then
+  echo "ERROR: Cannot find shared helper at ${SHARED_HELPER}"
+  exit 1
+fi
+
+if ! command -v python3 &>/dev/null; then
+  echo "ERROR: python3 is required for shared parsing helpers"
+  exit 1
+fi
+
+# Optional local config (same file used by web.sh)
+GEMINI_API_KEY="${GEMINI_API_KEY:-}"
+GEMINI_MODEL="${GEMINI_MODEL:-}"
+SSL_CERT_FILE="${SSL_CERT_FILE:-}"
+if [[ -f "${CONFIG_FILE}" ]]; then
+  # shellcheck disable=SC1090
+  source "${CONFIG_FILE}"
+fi
+
+# Keep explicit environment variables if already set; otherwise use config values.
+export ECK_GLANCE_GEMINI_API_KEY="${ECK_GLANCE_GEMINI_API_KEY:-${GEMINI_API_KEY:-}}"
+if [[ -n "${ECK_GLANCE_GEMINI_MODEL:-${GEMINI_MODEL:-}}" ]]; then
+  export ECK_GLANCE_GEMINI_MODEL="${ECK_GLANCE_GEMINI_MODEL:-${GEMINI_MODEL}}"
+fi
+if [[ -n "${SSL_CERT_FILE:-}" ]]; then
+  export SSL_CERT_FILE
+fi
+
 # shellcheck source=eck-lib.sh
 source "${LIB_FILE}"
 
-# ==============================================================================
-# USAGE & ARGUMENT PARSING
-# ==============================================================================
+# CLI
 
 usage() {
-  # Use printf for reliable escape code rendering across shells
+  # printf keeps escape handling consistent across shells.
   printf "%beck-glance%b v${VERSION} - ECK Diagnostics Human-Readable Parser\n" "${BOLD}" "${RESET}"
   echo ""
   printf "%bUSAGE:%b\n" "${BOLD}" "${RESET}"
@@ -66,6 +86,7 @@ usage() {
   printf "%bOUTPUT:%b\n" "${BOLD}" "${RESET}"
   echo "  Creates an eck-glance-output/ directory with:"
   echo "    00_summary.txt              - Overview and health status (START HERE)"
+  echo "    00_gemini-review.md         - AI-generated troubleshooting review (if API key configured)"
   echo "    00_diagnostic-errors.txt    - Diagnostic collection errors"
   echo "    00_clusterroles.txt         - ClusterRole validation"
   echo "    eck_nodes.txt               - Kubernetes worker node info"
@@ -92,7 +113,9 @@ usage() {
   echo "      eck_pvs.txt               - PV summary"
   echo "      eck_endpoints.txt         - Endpoint summary"
   echo "      eck_controllerrevisions.txt"
+  echo "      eck_controllerrevisions-deltas.txt - Revision timeline and reconcile deltas"
   echo "      eck_serviceaccounts.txt"
+  echo "      eck_ownership_analysis.txt - managedFields field ownership & conflict checks"
   echo ""
   printf "%bTIPS:%b\n" "${BOLD}" "${RESET}"
   echo "  Start with 00_summary.txt for a quick health overview, then drill into"
@@ -132,31 +155,33 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Default to current directory
+# Default to the current directory.
 [[ -z "${DIAG_DIR}" ]] && DIAG_DIR="$(pwd)"
 
-# Resolve to absolute path
+# Resolve an absolute diagnostics path.
 DIAG_DIR="$(cd "${DIAG_DIR}" 2>/dev/null && pwd)" || {
   echo "ERROR: Cannot access directory: ${DIAG_DIR}"
   exit 1
 }
 
-# ==============================================================================
-# ERROR HANDLING
-# ==============================================================================
+# Errors
 
 ERROR_COUNT=0
 PARSE_ERRORS=()
+ERROR_LOG_FILE=""
 
-# Track parse errors without failing
+# Record parse errors without aborting.
 track_error() {
   local resource="$1"
   local message="$2"
   PARSE_ERRORS+=("${resource}: ${message}")
   ((ERROR_COUNT++)) || true
+  if [[ "${FAST_MODE}" == true && -n "${ERROR_LOG_FILE}" ]]; then
+    printf '%s\n' "${resource}: ${message}" >> "${ERROR_LOG_FILE}"
+  fi
 }
 
-# Cleanup handler
+# Wait for background work before exit.
 cleanup() {
   local exit_code=$?
   # Wait for any background jobs
@@ -167,9 +192,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# ==============================================================================
-# LOGGING
-# ==============================================================================
+# Logging
 
 log() {
   [[ "${QUIET}" == true ]] && return
@@ -194,11 +217,9 @@ log_warn() {
   echo -e "${YELLOW}[eck-glance] WARN:${RESET} $*" >&2
 }
 
-# ==============================================================================
-# VALIDATION
-# ==============================================================================
+# Validation
 
-# Check for required tools
+# Required tools.
 for tool in jq column; do
   if ! command -v "${tool}" &>/dev/null; then
     log_error "'${tool}' is required but not found. Please install it."
@@ -206,7 +227,7 @@ for tool in jq column; do
   fi
 done
 
-# Validate that this looks like an eck-diagnostics directory
+# Validate the diagnostics directory.
 validate_diag_dir() {
   local dir="$1"
 
@@ -222,9 +243,9 @@ validate_diag_dir() {
     [[ -d "${d}" ]] || continue
     local basename
     basename="$(basename "${d}")"
-    # Skip hidden dirs and output dir
+    # Ignore hidden and generated directories.
     [[ "${basename}" == .* || "${basename}" == "eck-glance-output" ]] && continue
-    # Check if it has kubernetes resource JSON files
+    # Namespace dirs must contain JSON resources.
     if ls "${d}"/*.json &>/dev/null; then
       has_namespace=true
       break
@@ -244,20 +265,20 @@ validate_diag_dir() {
 
 validate_diag_dir "${DIAG_DIR}" || exit 1
 
-# ==============================================================================
-# DISCOVERY
-# ==============================================================================
+# Discovery
 
-# Set output directory
+# Set the output directory.
 [[ -z "${OUTPUT_DIR}" ]] && OUTPUT_DIR="${DIAG_DIR}/eck-glance-output"
 mkdir -p "${OUTPUT_DIR}"
+ERROR_LOG_FILE="${OUTPUT_DIR}/.eck-glance-parse-errors.tmp"
+: > "${ERROR_LOG_FILE}"
 
 log "ECK Glance v${VERSION}"
 log "Diagnostics: ${DIAG_DIR}"
 log "Output:      ${OUTPUT_DIR}"
 echo ""
 
-# Display manifest info if available
+# Show manifest metadata when present.
 if [[ -f "${DIAG_DIR}/manifest.json" ]]; then
   diag_version=$(safe_jq '.diagVersion' "${DIAG_DIR}/manifest.json")
   diag_date=$(safe_jq '.collectionDate' "${DIAG_DIR}/manifest.json")
@@ -274,25 +295,30 @@ if [[ -f "${DIAG_DIR}/manifest.json" ]]; then
   fi
 fi
 
-# Display version info if available
+# Show cluster version when present.
 if [[ -f "${DIAG_DIR}/version.json" ]]; then
   k8s_version=$(safe_jq '.ServerVersion.gitVersion' "${DIAG_DIR}/version.json")
   log "Kubernetes:   ${k8s_version}"
 fi
 echo ""
 
-# Discover namespaces by scanning directories
+# Discover namespaces from subdirectories.
 discover_namespaces() {
   local dir="$1"
+
+  if [[ -f "${SHARED_HELPER}" ]]; then
+    python3 "${SHARED_HELPER}" discover-namespaces "${dir}" 2>/dev/null && return 0
+  fi
+
   local namespaces=()
   local d
   for d in "${dir}"/*/; do
     [[ -d "${d}" ]] || continue
     local basename
     basename="$(basename "${d}")"
-    # Skip hidden dirs, output dir, and non-namespace dirs
+    # Ignore hidden, output, and non-namespace dirs.
     [[ "${basename}" == .* || "${basename}" == "eck-glance-output" ]] && continue
-    # Must contain at least one JSON file
+    # Namespace dirs must contain JSON files.
     if ls "${d}"/*.json &>/dev/null; then
       namespaces+=("${basename}")
     fi
@@ -307,54 +333,30 @@ if [[ -z "${NAMESPACES}" ]]; then
   exit 1
 fi
 
-log "Discovered namespaces: $(echo ${NAMESPACES} | tr '\n' ' ')"
+log "Discovered namespaces: $(printf '%s' "${NAMESPACES}" | tr '\n' ' ')"
 echo ""
 
-# ==============================================================================
-# KNOWN RESOURCE TYPES (for detecting unknown JSON files)
-# ==============================================================================
+# Known resource files
+declare -A KNOWN_JSON_SET=()
 
-# These are the JSON files we have dedicated parsers for
-KNOWN_JSON_FILES=(
-  "agent.json"
-  "apmserver.json"
-  "beat.json"
-  "configmaps.json"
-  "controllerrevisions.json"
-  "daemonsets.json"
-  "deployments.json"
-  "elasticmapsserver.json"
-  "elasticsearch.json"
-  "endpoints.json"
-  "enterprisesearch.json"
-  "events.json"
-  "kibana.json"
-  "logstash.json"
-  "persistentvolumeclaims.json"
-  "persistentvolumes.json"
-  "pods.json"
-  "replicasets.json"
-  "secrets.json"
-  "serviceaccount.json"
-  "services.json"
-  "statefulsets.json"
-)
+load_known_json_set() {
+  local known_file
+  while IFS= read -r known_file; do
+    [[ -z "${known_file}" ]] && continue
+    KNOWN_JSON_SET["${known_file}"]=1
+  done < <(python3 "${SHARED_HELPER}" known-json-cli 2>/dev/null)
+}
+
+load_known_json_set
 
 is_known_json() {
   local filename="$1"
-  local known
-  for known in "${KNOWN_JSON_FILES[@]}"; do
-    [[ "${filename}" == "${known}" ]] && return 0
-  done
-  return 1
+  [[ -n "${KNOWN_JSON_SET["${filename}"]:-}" ]]
 }
 
-# ==============================================================================
-# HELPER: PROCESS A RESOURCE TYPE
-# ==============================================================================
+# Resource helpers
 
-# Generic resource processor for types with summary + per-item describe
-# Usage: process_resource namespace json_file summary_func describe_func output_prefix kind_name events_file
+# Write a summary plus per-item describe files.
 process_resource() {
   local ns="$1"
   local json_file="$2"
@@ -373,12 +375,12 @@ process_resource() {
   local ns_output="${OUTPUT_DIR}/${ns}"
   mkdir -p "${ns_output}"
 
-  # Summary
+  # Summary file.
   if ! "${summary_func}" "${json_file}" > "${ns_output}/${output_prefix}s.txt" 2>/dev/null; then
     track_error "${kind_name}" "Failed to generate summary for ${json_file}"
   fi
 
-  # Per-item describe
+  # Per-item describe files.
   local names
   names=$(get_item_names "${json_file}")
   [[ -z "${names}" ]] && return 0
@@ -388,46 +390,24 @@ process_resource() {
     [[ -z "${item_name}" ]] && continue
     log_detail "${kind_name}: ${item_name}"
     if [[ "${FAST_MODE}" == true ]]; then
-      "${describe_func}" "${json_file}" "${item_name}" "${events_file}" > "${ns_output}/${output_prefix}-${item_name}.txt" 2>/dev/null &
+      (
+        if ! "${describe_func}" "${json_file}" "${item_name}" "${events_file}" > "${ns_output}/${output_prefix}-${item_name}.txt" 2>/dev/null; then
+          track_error "${kind_name}" "Failed to describe ${item_name}"
+        fi
+      ) &
     else
       if ! "${describe_func}" "${json_file}" "${item_name}" "${events_file}" > "${ns_output}/${output_prefix}-${item_name}.txt" 2>/dev/null; then
         track_error "${kind_name}" "Failed to describe ${item_name}"
       fi
     fi
   done <<< "${names}"
-  # In fast mode, wait for all per-item describe jobs before returning.
-  # Required so that when process_resource itself runs as a background job (called
-  # with &), all its sub-jobs finish before the parent's wait considers it done.
+  # Wait for child describe jobs before returning.
   if [[ "${FAST_MODE}" == true ]]; then
     wait
   fi
 }
 
-# Generic resource processor for types with summary only (no per-item describe)
-# Usage: process_resource_summary namespace json_file summary_func output_name kind_name
-process_resource_summary() {
-  local ns="$1"
-  local json_file="$2"
-  local summary_func="$3"
-  local output_name="$4"
-  local kind_name="$5"
-
-  if ! has_items "${json_file}"; then
-    return 0
-  fi
-
-  log_ns "Parsing ${kind_name}"
-
-  local ns_output="${OUTPUT_DIR}/${ns}"
-  mkdir -p "${ns_output}"
-
-  if ! "${summary_func}" "${json_file}" > "${ns_output}/${output_name}" 2>/dev/null; then
-    track_error "${kind_name}" "Failed to generate summary for ${json_file}"
-  fi
-}
-
-# Generic resource processor: summary table + per-item describe all in one file
-# Usage: process_resource_combined namespace json_file summary_func describe_func output_name kind_name events_file
+# Write summary and describe output to one file.
 process_resource_combined() {
   local ns="$1"
   local json_file="$2"
@@ -447,10 +427,10 @@ process_resource_combined() {
   mkdir -p "${ns_output}"
 
   {
-    # Summary table at top
+    # Summary table.
     "${summary_func}" "${json_file}" 2>/dev/null
 
-    # Per-item describe below
+    # Per-item sections.
     local names
     names=$(get_item_names "${json_file}")
     if [[ -n "${names}" ]]; then
@@ -464,13 +444,9 @@ process_resource_combined() {
   } > "${ns_output}/${output_name}" || track_error "${kind_name}" "Failed to parse ${json_file}"
 }
 
-# ==============================================================================
-# SYMLINK HELPERS
-# ==============================================================================
+# Symlink helpers
 
-# Portable relative path calculation (works on macOS and Linux)
-# Usage: portable_relpath <from_dir> <to_path>
-# Both paths must be absolute
+# Compute a relative path on macOS and Linux.
 portable_relpath() {
   local from_dir="$1"
   local to_path="$2"
@@ -481,13 +457,12 @@ portable_relpath() {
   elif command -v python &>/dev/null; then
     python -c "import os.path; print(os.path.relpath('${to_path}', '${from_dir}'))"
   else
-    # Fallback: use absolute path
+    # Fall back to an absolute path.
     echo "${to_path}"
   fi
 }
 
-# Create a symlink with portable relative paths
-# Usage: make_relative_symlink <link_dir> <target_path> <link_name>
+# Create a relative symlink.
 make_relative_symlink() {
   local link_dir="$1"
   local target_path="$2"
@@ -497,7 +472,7 @@ make_relative_symlink() {
   ln -snf "${rel_path}" "${link_dir}/${link_name}" 2>/dev/null || true
 }
 
-# Create symlinks to ES/Kibana/Agent diagnostic subdirectories and pod logs
+# Link diagnostics and pod logs into the output tree.
 create_symlinks() {
   local ns="$1"
   local ns_dir="$2"
@@ -555,20 +530,18 @@ create_symlinks() {
   fi
 }
 
-# ==============================================================================
-# MAIN PROCESSING
-# ==============================================================================
+# Main processing
 
-# ============== Global Resources (pre-namespace) ==============
+# Global resources
 
-# Diagnostic errors - process first for visibility (always synchronous)
+# Show collection errors first.
 if [[ -f "${DIAG_DIR}/eck-diagnostic-errors.txt" ]] && [[ -s "${DIAG_DIR}/eck-diagnostic-errors.txt" ]]; then
   log "Parsing diagnostic errors"
   parse_diagnostic_errors "${DIAG_DIR}/eck-diagnostic-errors.txt" > "${OUTPUT_DIR}/00_diagnostic-errors.txt"
   log_warn "Diagnostic errors detected - see 00_diagnostic-errors.txt"
 fi
 
-# ClusterRoles, PodSecurityPolicies, Nodes, and Storage classes can run in parallel in fast mode
+# Parse cluster-wide resources before namespaces.
 if [[ "${FAST_MODE}" == true ]]; then
   # ============== Parallel global resources ==============
 
@@ -645,7 +618,7 @@ else
   # PodSecurityPolicies (deprecated in K8s 1.21+, removed in 1.25)
   if [[ -f "${DIAG_DIR}/podsecuritypolicies.json" ]]; then
     log "Parsing pod security policies"
-    # Check if it's a valid JSON with items or an error message
+    # Handle either JSON data or a plain error message.
     if jq -e '.items' "${DIAG_DIR}/podsecuritypolicies.json" &>/dev/null; then
       if has_items "${DIAG_DIR}/podsecuritypolicies.json"; then
         parse_generic_json "${DIAG_DIR}/podsecuritypolicies.json" "PodSecurityPolicies" > "${OUTPUT_DIR}/00_podsecuritypolicies.txt"
@@ -683,18 +656,9 @@ else
 
 fi
 
-# ==============================================================================
-# NAMESPACE PROCESSOR
-# ==============================================================================
+# Namespace processing
 
-# Process a single namespace.
-# In --fast mode this is invoked as a background subshell, providing three
-# levels of parallelism:
-#   1. All namespaces run concurrently (namespace-level)
-#   2. All resource types within a namespace run concurrently (type-level)
-#   3. Per-item describe jobs within each resource type run concurrently (item-level)
-# process_resource() already waits for its own item-level jobs before returning,
-# so the type-level wait below cleanly covers everything.
+# Process one namespace, optionally with nested parallelism.
 process_namespace() {
   local namespace="$1"
   local NS_DIR="${DIAG_DIR}/${namespace}"
@@ -711,7 +675,7 @@ process_namespace() {
     log_ns "Parsing events"
     parse_events "${NS_DIR}/events.json" > "${EVENTS_FILE}" 2>/dev/null
 
-    # Events by kind
+    # Per-kind event view.
     log_ns "Parsing events by kind"
     parse_events_by_kind "${EVENTS_FILE}" > "${NS_OUTPUT}/eck_events-perkind.txt" 2>/dev/null
   else
@@ -719,7 +683,7 @@ process_namespace() {
   fi
 
   if [[ "${FAST_MODE}" == true ]]; then
-    # ============== ECK Custom Resources (parallel) ==============
+    # ECK resources.
 
     process_resource "${namespace}" "${NS_DIR}/elasticsearch.json" \
       parse_elasticsearch_summary parse_elasticsearch_describe \
@@ -753,10 +717,9 @@ process_namespace() {
       parse_logstash_summary parse_logstash_describe \
       "eck_logstash" "Logstash" "${EVENTS_FILE}" &
 
-    # ============== Kubernetes Resources (parallel) ==============
+    # Kubernetes resources.
 
-    # Pods: run summary then per-pod describes inside a subshell so we can
-    # wait internally for per-pod jobs before the subshell itself exits.
+    # Keep pod summary and per-pod output grouped together.
     if has_items "${NS_DIR}/pods.json"; then
       (
         log_ns "Parsing Pods"
@@ -765,7 +728,11 @@ process_namespace() {
         while IFS= read -r pod_name; do
           [[ -z "${pod_name}" ]] && continue
           log_detail "Pod: ${pod_name}"
-          parse_pod_describe "${NS_DIR}/pods.json" "${pod_name}" "${EVENTS_FILE}" > "${NS_OUTPUT}/eck_pod-${pod_name}.txt" 2>/dev/null &
+          (
+            if ! parse_pod_describe "${NS_DIR}/pods.json" "${pod_name}" "${EVENTS_FILE}" > "${NS_OUTPUT}/eck_pod-${pod_name}.txt" 2>/dev/null; then
+              track_error "Pods" "Failed to describe ${pod_name}"
+            fi
+          ) &
         done <<< "${pod_names}"
         wait
       ) &
@@ -787,7 +754,7 @@ process_namespace() {
       parse_replicasets_summary parse_replicaset_describe \
       "eck_replicaset" "ReplicaSet" "${EVENTS_FILE}" &
 
-    # Combined summary+describe resources — each writes to its own file, safe to parallelize
+    # Combined resources each write to a separate file.
     process_resource_combined "${namespace}" "${NS_DIR}/services.json" \
       parse_services_summary parse_services_describe "eck_services.txt" "Services" "${EVENTS_FILE}" &
 
@@ -809,10 +776,22 @@ process_namespace() {
     process_resource_combined "${namespace}" "${NS_DIR}/controllerrevisions.json" \
       parse_controllerrevisions_summary parse_controllerrevisions_describe "eck_controllerrevisions.txt" "Controller Revisions" "${EVENTS_FILE}" &
 
+    # ControllerRevision timeline/delta analysis.
+    if [[ -f "${NS_DIR}/controllerrevisions.json" ]] && has_items "${NS_DIR}/controllerrevisions.json"; then
+      log_ns "Analyzing ControllerRevision deltas"
+      python3 "${SHARED_HELPER}" controllerrevision-report "${NS_DIR}" \
+        > "${NS_OUTPUT}/eck_controllerrevisions-deltas.txt" 2>/dev/null &
+    fi
+
     process_resource_combined "${namespace}" "${NS_DIR}/serviceaccount.json" \
       parse_serviceaccounts_summary parse_serviceaccounts_describe "eck_serviceaccounts.txt" "Service Accounts" "${EVENTS_FILE}" &
 
-    # Unknown/extra JSON files
+    # managedFields ownership analysis for this namespace.
+    log_ns "Checking field ownership (managedFields)"
+    python3 "${SHARED_HELPER}" managed-fields-check "${NS_DIR}" \
+      > "${NS_OUTPUT}/eck_ownership_analysis.txt" 2>/dev/null &
+
+    # Unknown resource files.
     local xjson xbase xresname
     for xjson in "${NS_DIR}"/*.json; do
       [[ -f "${xjson}" ]] || continue
@@ -826,14 +805,13 @@ process_namespace() {
       fi
     done
 
-    # Wait for all resource-type background jobs
-    # (each process_resource job already waits for its per-item sub-jobs internally)
+    # Wait for namespace jobs.
     wait
 
   else
-    # ============== Sequential resource processing ==============
+    # Sequential mode.
 
-    # ECK Custom Resources
+    # ECK resources.
     process_resource "${namespace}" "${NS_DIR}/elasticsearch.json" \
       parse_elasticsearch_summary parse_elasticsearch_describe \
       "eck_elasticsearch" "Elasticsearch" "${EVENTS_FILE}"
@@ -866,9 +844,9 @@ process_namespace() {
       parse_logstash_summary parse_logstash_describe \
       "eck_logstash" "Logstash" "${EVENTS_FILE}"
 
-    # Kubernetes Resources
+    # Kubernetes resources.
 
-    # Pods
+    # Pods.
     if has_items "${NS_DIR}/pods.json"; then
       log_ns "Parsing Pods"
       parse_pods_summary "${NS_DIR}/pods.json" > "${NS_OUTPUT}/eck_pods.txt" 2>/dev/null
@@ -898,7 +876,7 @@ process_namespace() {
       parse_replicasets_summary parse_replicaset_describe \
       "eck_replicaset" "ReplicaSet" "${EVENTS_FILE}"
 
-    # Combined summary + describe resources (listing on top, describe per item below)
+    # Combined resources.
     process_resource_combined "${namespace}" "${NS_DIR}/services.json" \
       parse_services_summary parse_services_describe "eck_services.txt" "Services" "${EVENTS_FILE}"
 
@@ -920,10 +898,22 @@ process_namespace() {
     process_resource_combined "${namespace}" "${NS_DIR}/controllerrevisions.json" \
       parse_controllerrevisions_summary parse_controllerrevisions_describe "eck_controllerrevisions.txt" "Controller Revisions" "${EVENTS_FILE}"
 
+    # ControllerRevision timeline/delta analysis.
+    if [[ -f "${NS_DIR}/controllerrevisions.json" ]] && has_items "${NS_DIR}/controllerrevisions.json"; then
+      log_ns "Analyzing ControllerRevision deltas"
+      python3 "${SHARED_HELPER}" controllerrevision-report "${NS_DIR}" \
+        > "${NS_OUTPUT}/eck_controllerrevisions-deltas.txt" 2>/dev/null
+    fi
+
     process_resource_combined "${namespace}" "${NS_DIR}/serviceaccount.json" \
       parse_serviceaccounts_summary parse_serviceaccounts_describe "eck_serviceaccounts.txt" "Service Accounts" "${EVENTS_FILE}"
 
-    # Unknown/extra JSON files
+    # managedFields ownership analysis for this namespace.
+    log_ns "Checking field ownership (managedFields)"
+    python3 "${SHARED_HELPER}" managed-fields-check "${NS_DIR}" \
+      > "${NS_OUTPUT}/eck_ownership_analysis.txt" 2>/dev/null
+
+    # Unknown resource files.
     local xjson xbase xresname
     for xjson in "${NS_DIR}"/*.json; do
       [[ -f "${xjson}" ]] || continue
@@ -944,47 +934,68 @@ process_namespace() {
   create_symlinks "${namespace}" "${NS_DIR}"
 }
 
-# ============== Per-namespace processing ==============
-# In --fast mode all namespaces are dispatched as background subshells so they
-# run concurrently; within each subshell resource types also run in parallel.
+# Namespace fan-out
 
-for namespace in ${NAMESPACES}; do
+while IFS= read -r namespace; do
+  [[ -z "${namespace}" ]] && continue
   if [[ "${FAST_MODE}" == true ]]; then
     process_namespace "${namespace}" &
   else
     process_namespace "${namespace}"
   fi
-done
+done <<< "${NAMESPACES}"
 
-# Wait for all namespace background jobs to finish in fast mode
+# Wait for namespace jobs in fast mode.
 if [[ "${FAST_MODE}" == true ]]; then
   wait
 fi
 
-# ==============================================================================
-# SUMMARY FILE
-# ==============================================================================
+# Summary
 
 log ""
 log "Generating summary overview"
 generate_summary "${DIAG_DIR}" "${NAMESPACES}" > "${OUTPUT_DIR}/00_summary.txt"
 
-# ==============================================================================
-# COMPLETION SUMMARY
-# ==============================================================================
+# Optional Gemini review (auto-enabled when API key is configured)
+GEMINI_REVIEW_FILE="${OUTPUT_DIR}/00_gemini-review.md"
+GEMINI_ERROR_FILE="${OUTPUT_DIR}/00_gemini-review.error.txt"
+if [[ -n "${ECK_GLANCE_GEMINI_API_KEY:-}" ]]; then
+  log "Running Gemini review"
+  if python3 "${SHARED_HELPER}" gemini-review "${DIAG_DIR}" > "${GEMINI_REVIEW_FILE}" 2> "${GEMINI_ERROR_FILE}"; then
+    if [[ ! -s "${GEMINI_REVIEW_FILE}" ]]; then
+      log_warn "Gemini review returned empty output"
+      rm -f "${GEMINI_REVIEW_FILE}"
+    else
+      log "Gemini review saved to: ${GEMINI_REVIEW_FILE}"
+    fi
+    rm -f "${GEMINI_ERROR_FILE}"
+  else
+    log_warn "Gemini review failed; see ${GEMINI_ERROR_FILE}"
+    rm -f "${GEMINI_REVIEW_FILE}" 2>/dev/null || true
+  fi
+else
+  log "Gemini review skipped (no GEMINI_API_KEY configured)"
+fi
+
+# Completion
 
 echo ""
 log "${GREEN}Done!${RESET}"
 log "Output files are in: ${OUTPUT_DIR}"
 echo ""
 
-# Count output files
+# Count generated files.
 total_files=$(find "${OUTPUT_DIR}" -name "*.txt" -type f 2>/dev/null | wc -l)
 total_symlinks=$(find "${OUTPUT_DIR}" -type l 2>/dev/null | wc -l)
 log "Generated ${total_files} output files, ${total_symlinks} symlinks"
 echo ""
 
-# Report any parse errors
+# Report parse errors.
+if [[ "${FAST_MODE}" == true && -f "${ERROR_LOG_FILE}" ]]; then
+  mapfile -t PARSE_ERRORS < <(grep -v '^$' "${ERROR_LOG_FILE}" || true)
+  ERROR_COUNT=${#PARSE_ERRORS[@]}
+fi
+
 if [[ ${ERROR_COUNT} -gt 0 ]]; then
   log_warn "${ERROR_COUNT} parse error(s) encountered:"
   for err in "${PARSE_ERRORS[@]}"; do
@@ -995,10 +1006,27 @@ fi
 
 log "Suggested analysis order:"
 log "  1. ${BOLD}00_summary.txt${RESET}          - Quick health overview (START HERE)"
-log "  2. 00_diagnostic-errors.txt  - Collection errors"
-log "  3. 00_clusterroles.txt       - RBAC validation"
-log "  4. <ns>/eck_events.txt       - Warning and error events"
-log "  5. <ns>/eck_pods.txt         - Pod health and readiness"
-log "  6. <ns>/eck_elasticsearchs.txt - ES cluster health"
-log "  7. Individual pod/resource files for deep-dive"
-log "  8. diagnostics/ & pod-logs/  - Raw ES/KB diagnostics and container logs"
+if [[ -f "${GEMINI_REVIEW_FILE}" ]]; then
+  log "  2. 00_gemini-review.md      - AI troubleshooting summary"
+  log "  3. 00_diagnostic-errors.txt  - Collection errors"
+  log "  4. 00_clusterroles.txt       - RBAC validation"
+  log "  5. <ns>/eck_events.txt       - Warning and error events"
+  log "  6. <ns>/eck_pods.txt         - Pod health and readiness"
+  log "  7. <ns>/eck_elasticsearch.txt - ES cluster health"
+  log "  8. <ns>/eck_controllerrevisions-deltas.txt - Reconcile timeline and spec deltas"
+  log "  9. <ns>/eck_ownership_analysis.txt - Field ownership & conflict checks"
+  log "  10. Individual pod/resource files for deep-dive"
+  log "  11. diagnostics/ & pod-logs/ - Raw ES/KB diagnostics and container logs"
+else
+  log "  2. 00_diagnostic-errors.txt  - Collection errors"
+  log "  3. 00_clusterroles.txt       - RBAC validation"
+  log "  4. <ns>/eck_events.txt       - Warning and error events"
+  log "  5. <ns>/eck_pods.txt         - Pod health and readiness"
+  log "  6. <ns>/eck_elasticsearch.txt - ES cluster health"
+  log "  7. <ns>/eck_controllerrevisions-deltas.txt - Reconcile timeline and spec deltas"
+  log "  8. <ns>/eck_ownership_analysis.txt - Field ownership & conflict checks"
+  log "  9. Individual pod/resource files for deep-dive"
+  log "  10. diagnostics/ & pod-logs/  - Raw ES/KB diagnostics and container logs"
+fi
+
+[[ -n "${ERROR_LOG_FILE}" ]] && rm -f "${ERROR_LOG_FILE}"

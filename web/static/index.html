@@ -17,16 +17,6 @@
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js"></script>
 
-  <!-- CDN Load Check -->
-  <script>
-    window.__cdnErrors = [];
-    if (typeof React === 'undefined') window.__cdnErrors.push('React');
-    if (typeof ReactDOM === 'undefined') window.__cdnErrors.push('ReactDOM');
-    if (typeof Babel === 'undefined') window.__cdnErrors.push('Babel');
-    if (typeof marked === 'undefined') window.__cdnErrors.push('marked');
-    if (typeof DOMPurify === 'undefined') window.__cdnErrors.push('DOMPurify');
-  </script>
-
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
 
@@ -397,6 +387,47 @@
       return <span className={`status-badge ${colorClass}`}>{label}</span>;
     };
 
+    // ManagedFields Ownership Analysis Component
+    // Renders finding badges from resource._managedFieldsFindings (populated by backend).
+    const ManagedFieldsAnalysis = ({ findings }) => {
+      if (!findings || findings.length === 0) return null;
+      const warnings = findings.filter(f => f.level === 'warning');
+      const infos = findings.filter(f => f.level === 'info');
+      const borderColor = warnings.length > 0 ? '#f59e0b' : 'var(--border-primary)';
+      return (
+        <div className="card p-6 mb-6" style={{borderLeft: `4px solid ${borderColor}`}}>
+          <h2 className="text-lg font-bold mb-1">Field Ownership Analysis</h2>
+          <p className="text-xs mb-4" style={{color: 'var(--text-secondary)'}}>
+            Detected from <code>managedFields</code> — tracks which controllers last wrote each field.
+          </p>
+          <div className="space-y-3">
+            {warnings.map((f, i) => (
+              <div key={`w${i}`} className="rounded p-3" style={{backgroundColor: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)'}}>
+                <div className="flex items-start gap-2">
+                  <span className="text-xs font-bold px-1.5 py-0.5 rounded shrink-0" style={{background:'#f59e0b', color:'#fff'}}>WARNING</span>
+                  <div>
+                    <div className="text-sm font-semibold">{f.message}</div>
+                    {f.detail && <div className="text-xs font-mono mt-1" style={{color: 'var(--text-secondary)'}}>{f.detail}</div>}
+                  </div>
+                </div>
+              </div>
+            ))}
+            {infos.map((f, i) => (
+              <div key={`i${i}`} className="rounded p-3" style={{backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-primary)'}}>
+                <div className="flex items-start gap-2">
+                  <span className="text-xs font-bold px-1.5 py-0.5 rounded shrink-0" style={{background:'var(--bg-tertiary)', color:'var(--text-secondary)'}}>INFO</span>
+                  <div>
+                    <div className="text-sm">{f.message}</div>
+                    {f.detail && <div className="text-xs font-mono mt-1" style={{color: 'var(--text-secondary)'}}>{f.detail}</div>}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    };
+
     // SmartJSON Component - renders JSON intelligently
     const SmartJSON = ({ value, indent = 0, maxDepth = 15 }) => {
       if (indent > maxDepth) return <span className="json-string">"..."</span>;
@@ -538,6 +569,10 @@
         const res = await fetch('/api/config');
         return res.json();
       },
+      getResourceCatalog: async () => {
+        const res = await fetch('/api/resource-catalog');
+        return res.json();
+      },
       getGeminiReview: async (bundleId, notes = '') => {
         const res = await fetch(`/api/bundle/${bundleId}/gemini-review`, {
           method: 'POST',
@@ -596,6 +631,10 @@
       },
       getRelationships: async (bundleId, ns) => {
         const res = await fetch(`/api/bundle/${bundleId}/ns/${ns}/relationships`);
+        return res.json();
+      },
+      getEckInfo: async (bundleId) => {
+        const res = await fetch(`/api/bundle/${bundleId}/eck`);
         return res.json();
       },
       getDiagnostics: async (bundleId) => {
@@ -693,11 +732,22 @@
         const formData = new FormData();
         formData.append('file', file);
         try {
-          await fetch('/api/upload', { method: 'POST', body: formData });
+          setError(null);
+          const response = await fetch('/api/upload', { method: 'POST', body: formData });
+          if (!response.ok) {
+            let message = 'Upload failed';
+            try {
+              const payload = await response.json();
+              message = payload?.error || payload?.message || message;
+            } catch {}
+            throw new Error(message);
+          }
           const updated = await api.listBundles();
           setBundles(updated);
         } catch (err) {
           setError(err.message);
+        } finally {
+          e.target.value = '';
         }
       };
 
@@ -722,6 +772,11 @@
               Upload Bundle
               <input type="file" className="hidden" onChange={handleUpload} />
             </label>
+            <div className="mt-3 rounded-xl border border-surface-700/70 bg-surface-800/70 px-3 py-2 text-xs leading-relaxed text-gray-300">
+              Large diagnostic bundle? Unzip it first and launch with
+              <div className="mt-2 font-mono text-[11px] text-brand-200">./web.sh /path/to/eck-diagnostics</div>
+            </div>
+            {error && <div className="mt-3 text-sm text-red-400">{error}</div>}
           </div>
 
           <div className="sidebar-scrollable space-y-3">
@@ -766,8 +821,8 @@
     }
 
     // Sidebar Navigation
-    // Type mapping: singular ownerReference kinds to plural server route types
-    const TYPE_SINGULAR_TO_PLURAL = {
+    // Fallback maps are used until backend catalog is fetched.
+    const DEFAULT_TYPE_SINGULAR_TO_PLURAL = {
       statefulset: 'statefulsets',
       deployment: 'deployments',
       replicaset: 'replicasets',
@@ -782,12 +837,70 @@
       serviceaccount: 'serviceaccounts',
       controllerrevision: 'controllerrevisions',
       endpoint: 'endpoints',
+      networkpolicy: 'networkpolicies',
     };
+
+    const DEFAULT_NAMESPACE_RESOURCE_TYPES = [
+      'elasticsearch', 'kibana', 'beat', 'agent', 'apmserver', 'enterprisesearch', 'elasticmapsserver', 'logstash',
+      'pods', 'statefulsets', 'deployments', 'replicasets', 'daemonsets',
+      'controllerrevisions',
+      'services', 'endpoints', 'networkpolicies',
+      'configmaps', 'secrets',
+      'persistentvolumeclaims', 'persistentvolumes', 'storageclasses'
+    ];
+
+    const DEFAULT_GRAPH_LAYER_LABELS = {
+      0: 'ECK CRDs', 1: 'NodeSets', 2: 'Workloads', 3: 'Pods', 4: 'Network',
+      5: 'ConfigMaps', 6: 'Secrets', 7: 'PVCs', 8: 'PVs', 9: 'StorageClasses'
+    };
+
+    const DEFAULT_RESOURCE_TYPE_ICONS = {
+      elasticsearch: 'ES', kibana: 'KB', pod: 'Pod', pods: 'Pod', service: 'Svc', services: 'Svc',
+      configmap: 'CM', configmaps: 'CM', secret: 'Sec', secrets: 'Sec', pvc: 'PVC',
+      deployment: 'Dep', deployments: 'Dep', statefulset: 'STS', statefulsets: 'STS',
+      agent: 'Agt', beat: 'Beat', apmserver: 'APM', logstash: 'LS', daemonset: 'DS',
+      daemonsets: 'DS', replicaset: 'RS', replicasets: 'RS', nodeset: 'NS',
+      persistentvolumeclaim: 'PVC', persistentvolumeclaims: 'PVC',
+      persistentvolume: 'PV', persistentvolumes: 'PV',
+      storageclass: 'SC', storageclasses: 'SC', endpoint: 'EP', endpoints: 'EP',
+      controllerrevision: 'CR', controllerrevisions: 'CR',
+      serviceaccount: 'SA', serviceaccounts: 'SA', networkpolicy: 'NP', networkpolicies: 'NP'
+    };
+
+    let RESOURCE_TYPE_SINGULAR_TO_PLURAL = { ...DEFAULT_TYPE_SINGULAR_TO_PLURAL };
+    let RESOURCE_GRAPH_LAYER_LABELS = { ...DEFAULT_GRAPH_LAYER_LABELS };
+    let RESOURCE_TYPE_ICONS = { ...DEFAULT_RESOURCE_TYPE_ICONS };
+
+    function applyResourceCatalog(catalog) {
+      const nextMap = catalog?.typeSingularToPlural;
+      if (nextMap && typeof nextMap === 'object') {
+        RESOURCE_TYPE_SINGULAR_TO_PLURAL = {
+          ...DEFAULT_TYPE_SINGULAR_TO_PLURAL,
+          ...nextMap,
+        };
+      }
+
+      const nextLayerLabels = catalog?.graphLayerLabels;
+      if (nextLayerLabels && typeof nextLayerLabels === 'object') {
+        RESOURCE_GRAPH_LAYER_LABELS = {
+          ...DEFAULT_GRAPH_LAYER_LABELS,
+          ...nextLayerLabels,
+        };
+      }
+
+      const nextTypeIcons = catalog?.resourceTypeIcons;
+      if (nextTypeIcons && typeof nextTypeIcons === 'object') {
+        RESOURCE_TYPE_ICONS = {
+          ...DEFAULT_RESOURCE_TYPE_ICONS,
+          ...nextTypeIcons,
+        };
+      }
+    }
 
     function normalizeType(type) {
       if (!type) return 'pods';
       const lower = type.toLowerCase();
-      return TYPE_SINGULAR_TO_PLURAL[lower] || lower;
+      return RESOURCE_TYPE_SINGULAR_TO_PLURAL[lower] || lower;
     }
 
     function Sidebar({ bundleId }) {
@@ -795,24 +908,23 @@
       const [namespaces, setNamespaces] = useState([]);
       const [expandedNs, setExpandedNs] = useState(null);
       const [nsResourceCounts, setNsResourceCounts] = useState({});
-      const [hasGeminiApiKey, setHasGeminiApiKey] = useState(false);
-      const allResourceTypes = [
-        'elasticsearch', 'kibana', 'beat', 'agent', 'apmserver', 'enterprisesearch', 'elasticmapsserver', 'logstash',
-        'pods', 'statefulsets', 'deployments', 'replicasets', 'daemonsets',
-        'services', 'endpoints', 'networkpolicies',
-        'configmaps', 'secrets',
-        'persistentvolumeclaims', 'persistentvolumes', 'storageclasses'
-      ];
+      const [allResourceTypes, setAllResourceTypes] = useState(DEFAULT_NAMESPACE_RESOURCE_TYPES);
 
       useEffect(() => {
+        api.getResourceCatalog()
+          .then(catalog => {
+            applyResourceCatalog(catalog);
+            const navTypes = Array.isArray(catalog?.namespaceNavTypes) ? catalog.namespaceNavTypes : null;
+            if (navTypes && navTypes.length > 0) {
+              setAllResourceTypes(navTypes);
+            }
+          })
+          .catch(() => {
+            // Keep fallback defaults when catalog endpoint is unavailable.
+          });
+
         api.getNamespaces(bundleId).then(setNamespaces);
       }, [bundleId]);
-
-      useEffect(() => {
-        api.getConfig()
-          .then(cfg => setHasGeminiApiKey(!!cfg?.hasGeminiApiKey))
-          .catch(() => setHasGeminiApiKey(false));
-      }, []);
 
       // When a namespace is expanded, fetch resource counts to hide empty types
       useEffect(() => {
@@ -830,7 +942,7 @@
             allResourceTypes.forEach(type => { emptyCounts[type] = 0; });
             setNsResourceCounts(prev => ({ ...prev, [expandedNs]: emptyCounts }));
           });
-      }, [bundleId, expandedNs]);
+      }, [bundleId, expandedNs, allResourceTypes]);
 
       return (
         <div className="sidebar p-4 space-y-4">
@@ -849,15 +961,20 @@
               <Icon name="dashboard" size={20} />
               Dashboard
             </Link>
-            {hasGeminiApiKey && (
-              <Link
-                to={`/bundle/${bundleId}/gemini-review`}
-                className="sidebar-nav-link"
-              >
-                <Icon name="search" size={20} />
-                Gemini Review
-              </Link>
-            )}
+            <Link
+              to={`/bundle/${bundleId}/eck`}
+              className="sidebar-nav-link"
+            >
+              <Icon name="zap" size={20} />
+              ECK
+            </Link>
+            <Link
+              to={`/bundle/${bundleId}/gemini-review`}
+              className="sidebar-nav-link"
+            >
+              <Icon name="search" size={20} />
+              Gemini Review
+            </Link>
             <Link
               to={`/bundle/${bundleId}/events`}
               className="sidebar-nav-link"
@@ -1110,6 +1227,363 @@
               )}
             </div>
           )}
+        </div>
+      );
+    }
+
+    // ECK Info Page
+    function EckInfoPage() {
+      const { bundleId } = useParams();
+      const [data, setData] = useState(null);
+      const [loading, setLoading] = useState(true);
+      const [expandedCrd, setExpandedCrd] = useState(null);
+      const [expandedConfig, setExpandedConfig] = useState(true);
+
+      useEffect(() => {
+        api.getEckInfo(bundleId)
+          .then(setData)
+          .catch(() => setData({}))
+          .finally(() => setLoading(false));
+      }, [bundleId]);
+
+      if (loading) return <div className="main-content p-8 text-sm">Loading ECK info…</div>;
+      if (!data)   return <div className="main-content p-8 text-sm">No ECK data available.</div>;
+
+      const { operator = {}, config = {}, crds = [], license = {} } = data;
+
+      // Group eck.yaml settings by category
+      const configGroups = [
+        {
+          label: 'Logging',
+          keys: ['log-verbosity'],
+        },
+        {
+          label: 'TLS / Certificates',
+          keys: ['ca-cert-validity', 'ca-cert-rotate-before', 'cert-validity', 'cert-rotate-before'],
+        },
+        {
+          label: 'Timeouts & Intervals',
+          keys: ['kube-client-timeout', 'elasticsearch-client-timeout', 'elasticsearch-observation-interval'],
+        },
+        {
+          label: 'Performance',
+          keys: ['max-concurrent-reconciles'],
+        },
+        {
+          label: 'Metrics',
+          keys: ['metrics-port', 'metrics-secure'],
+        },
+        {
+          label: 'Security & Webhooks',
+          keys: ['set-default-security-context', 'enable-webhook', 'webhook-name', 'webhook-port'],
+        },
+        {
+          label: 'Registry & Distribution',
+          keys: ['container-registry', 'distribution-channel', 'ubi-only'],
+        },
+        {
+          label: 'Operator Settings',
+          keys: ['operator-namespace', 'enable-leader-election', 'disable-config-watch',
+                 'disable-telemetry', 'validate-storage-class', 'exposed-node-labels'],
+        },
+      ];
+
+      // Catch any keys not in a group
+      const groupedKeys = configGroups.flatMap(g => g.keys);
+      const otherKeys = Object.keys(config).filter(k => !groupedKeys.includes(k));
+      if (otherKeys.length > 0) {
+        configGroups.push({ label: 'Other', keys: otherKeys });
+      }
+
+      const renderConfigValue = (val) => {
+        if (val === null || val === undefined) return <span className="text-gray-400 italic">—</span>;
+        if (typeof val === 'boolean') {
+          return <span className={val ? 'text-green-600 font-semibold' : 'text-gray-500'}>{String(val)}</span>;
+        }
+        return <span className="font-mono text-sm">{String(val)}</span>;
+      };
+
+      const healthColor = (h) => {
+        if (!h) return 'text-gray-400';
+        const l = h.toLowerCase();
+        if (l === 'green' || l === 'ready') return 'text-green-600';
+        if (l === 'yellow') return 'text-yellow-500';
+        if (l === 'red') return 'text-red-500';
+        return 'text-gray-500';
+      };
+
+      // License expiry human-readable
+      const formatExpiry = (millis) => {
+        if (!millis) return null;
+        try {
+          const d = new Date(Number(millis));
+          return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+        } catch { return String(millis); }
+      };
+
+      return (
+        <div className="main-content p-8">
+          <h1 className="text-2xl font-bold mb-6 flex items-center gap-2">
+            <Icon name="zap" size={24} />
+            ECK Operator
+          </h1>
+
+          {/* Operator Overview */}
+          <div className="card p-6 mb-6">
+            <h2 className="text-base font-bold mb-4 text-brand-600 uppercase tracking-wide">Operator</h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-5">
+              {operator.version && (
+                <div>
+                  <div className="text-xs text-gray-500 uppercase mb-1">Version</div>
+                  <div className="font-mono font-bold text-lg text-brand-500">{operator.version}</div>
+                </div>
+              )}
+              {operator.namespace && (
+                <div>
+                  <div className="text-xs text-gray-500 uppercase mb-1">Namespace</div>
+                  <div className="font-mono text-sm">{operator.namespace}</div>
+                </div>
+              )}
+              {operator.managedBy && (
+                <div>
+                  <div className="text-xs text-gray-500 uppercase mb-1">Managed By</div>
+                  <div className="font-mono text-sm">{operator.managedBy}</div>
+                </div>
+              )}
+              {operator.helmChart && (
+                <div>
+                  <div className="text-xs text-gray-500 uppercase mb-1">Helm Chart</div>
+                  <div className="font-mono text-sm">{operator.helmChart}</div>
+                </div>
+              )}
+              {operator.image && (
+                <div className="col-span-2">
+                  <div className="text-xs text-gray-500 uppercase mb-1">Image</div>
+                  <div className="font-mono text-xs break-all text-gray-700">{operator.image}</div>
+                </div>
+              )}
+              {!operator.version && !operator.namespace && (
+                <div className="col-span-3 text-sm text-gray-400 italic">Operator info not found in this bundle.</div>
+              )}
+            </div>
+          </div>
+
+          {/* License */}
+          <div className="card p-6 mb-6">
+            <h2 className="text-base font-bold mb-4 text-brand-600 uppercase tracking-wide">License</h2>
+            {(license.type || license.secrets?.length > 0 || license.usage?.found) ? (
+              <div className="space-y-4">
+                {license.usage?.found ? (
+                  <div>
+                    <div className="text-xs text-gray-500 uppercase mb-2">Usage (elastic-licensing)</div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-4">
+                      <div>
+                        <div className="text-xs text-gray-500 uppercase mb-1">License Level</div>
+                        <div className="font-semibold capitalize">{license.usage.licenseLevel || '—'}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500 uppercase mb-1">ERU Used</div>
+                        <div className="font-mono text-sm">{license.usage.eru?.used ?? '—'}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500 uppercase mb-1">ERU Max</div>
+                        <div className="font-mono text-sm">{license.usage.eru?.max ?? '—'}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500 uppercase mb-1">Managed Memory</div>
+                        <div className="font-mono text-sm">{license.usage.managedMemory?.human || '—'}</div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-2">
+                      <div>
+                        <div className="text-xs text-gray-500 uppercase mb-1">Managed Memory Bytes</div>
+                        <div className="font-mono text-xs text-gray-600">{license.usage.managedMemory?.bytes ?? '—'}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500 uppercase mb-1">Updated At</div>
+                        <div className="font-mono text-xs text-gray-600">{license.usage.updatedAt || '—'}</div>
+                      </div>
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      Source: {license.usage.namespace || 'unknown namespace'}/elastic-licensing
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
+                    Usage data is unavailable because this bundle does not include the
+                    <span className="font-mono"> elastic-licensing </span>
+                    ConfigMap.
+                  </div>
+                )}
+                {(license.type || license.status || license.expiry || license.uid) && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-4">
+                    {license.type && (
+                      <div>
+                        <div className="text-xs text-gray-500 uppercase mb-1">Type</div>
+                        <div className="font-semibold capitalize">{license.type}</div>
+                      </div>
+                    )}
+                    {license.status && (
+                      <div>
+                        <div className="text-xs text-gray-500 uppercase mb-1">Status</div>
+                        <StatusBadge status={license.status} />
+                      </div>
+                    )}
+                    {license.expiry && (
+                      <div>
+                        <div className="text-xs text-gray-500 uppercase mb-1">Expiry</div>
+                        <div className="font-mono text-sm">{formatExpiry(license.expiry)}</div>
+                      </div>
+                    )}
+                    {license.uid && (
+                      <div className="col-span-2">
+                        <div className="text-xs text-gray-500 uppercase mb-1">UID</div>
+                        <div className="font-mono text-xs text-gray-600">{license.uid}</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {license.secrets?.length > 0 && (
+                  <div>
+                    <div className="text-xs text-gray-500 uppercase mb-2">License Secrets</div>
+                    <table className="w-full text-sm border-collapse">
+                      <thead>
+                        <tr className="text-left text-xs text-gray-500 border-b">
+                          <th className="pb-2 pr-4 font-semibold">Name</th>
+                          <th className="pb-2 pr-4 font-semibold">Namespace</th>
+                          <th className="pb-2 pr-4 font-semibold">Type</th>
+                          <th className="pb-2 font-semibold">Scope</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {license.secrets.map((s, i) => (
+                          <tr key={i} className="border-b border-gray-100">
+                            <td className="py-2 pr-4 font-mono text-xs">{s.name}</td>
+                            <td className="py-2 pr-4 font-mono text-xs">{s.namespace}</td>
+                            <td className="py-2 pr-4 font-mono text-xs">{s.type || '—'}</td>
+                            <td className="py-2 font-mono text-xs">{s.scope || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400 italic">
+                No license details found. License secrets or elastic-licensing usage data were not collected in this bundle.
+              </p>
+            )}
+          </div>
+
+          {/* Elastic CRDs Installed */}
+          <div className="card p-6 mb-6">
+            <h2 className="text-base font-bold mb-4 text-brand-600 uppercase tracking-wide">Elastic CRDs Installed</h2>
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="text-left text-xs text-gray-500 border-b">
+                  <th className="pb-2 pr-4 font-semibold">Kind</th>
+                  <th className="pb-2 pr-4 font-semibold">API Group</th>
+                  <th className="pb-2 pr-4 font-semibold">API Version(s)</th>
+                  <th className="pb-2 font-semibold text-center">Instances</th>
+                </tr>
+              </thead>
+              <tbody>
+                {crds.map((crd) => (
+                  <React.Fragment key={crd.kind}>
+                    <tr
+                      className={`border-b border-gray-100 ${crd.count > 0 ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                      onClick={() => crd.count > 0 && setExpandedCrd(expandedCrd === crd.kind ? null : crd.kind)}
+                    >
+                      <td className="py-2 pr-4 font-semibold">
+                        {crd.count > 0 && (
+                          <Icon name={expandedCrd === crd.kind ? 'chevronDown' : 'chevronRight'} size={14} className="inline mr-1 text-gray-400" />
+                        )}
+                        {crd.kind}
+                      </td>
+                      <td className="py-2 pr-4 font-mono text-xs text-gray-600">{crd.apiGroup}</td>
+                      <td className="py-2 pr-4 font-mono text-xs text-gray-600">
+                        {crd.apiVersions.length > 0 ? crd.apiVersions.join(', ') : <span className="text-gray-300">—</span>}
+                      </td>
+                      <td className="py-2 text-center">
+                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${crd.count > 0 ? 'bg-brand-100 text-brand-700' : 'bg-gray-100 text-gray-400'}`}>
+                          {crd.count}
+                        </span>
+                      </td>
+                    </tr>
+                    {expandedCrd === crd.kind && crd.instances.length > 0 && (
+                      <tr>
+                        <td colSpan={4} className="pb-3 pt-1">
+                          <div className="bg-gray-50 rounded p-3 ml-5 text-xs">
+                            <table className="w-full">
+                              <thead>
+                                <tr className="text-gray-400 text-left">
+                                  <th className="pr-4 pb-1 font-semibold">Name</th>
+                                  <th className="pr-4 pb-1 font-semibold">Namespace</th>
+                                  <th className="pr-4 pb-1 font-semibold">Version</th>
+                                  <th className="pr-4 pb-1 font-semibold">Health</th>
+                                  <th className="pb-1 font-semibold">Phase</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {crd.instances.map((inst, i) => (
+                                  <tr key={i} className="border-t border-gray-100">
+                                    <td className="pr-4 py-1 font-mono">{inst.name || '—'}</td>
+                                    <td className="pr-4 py-1 font-mono">{inst.namespace || '—'}</td>
+                                    <td className="pr-4 py-1">{inst.version || '—'}</td>
+                                    <td className={`pr-4 py-1 font-semibold ${healthColor(inst.health)}`}>{inst.health || '—'}</td>
+                                    <td className="py-1">{inst.phase || '—'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* ECK Configuration */}
+          <div className="card p-6 mb-6">
+            <button
+              className="w-full flex items-center justify-between text-left"
+              onClick={() => setExpandedConfig(v => !v)}
+            >
+              <h2 className="text-base font-bold text-brand-600 uppercase tracking-wide">
+                ECK Configuration (eck.yaml)
+              </h2>
+              <Icon name={expandedConfig ? 'chevronDown' : 'chevronRight'} size={18} className="text-gray-400" />
+            </button>
+            {expandedConfig && (
+              <div className="mt-5 space-y-6">
+                {Object.keys(config).length === 0 ? (
+                  <p className="text-sm text-gray-400 italic">eck.yaml not found in this bundle.</p>
+                ) : (
+                  configGroups.map(group => {
+                    const present = group.keys.filter(k => k in config);
+                    if (present.length === 0) return null;
+                    return (
+                      <div key={group.label}>
+                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">{group.label}</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
+                          {present.map(key => (
+                            <div key={key} className="flex items-start justify-between py-1 border-b border-gray-100">
+                              <span className="font-mono text-xs text-gray-600 pr-4">{key}</span>
+                              <span className="text-right">{renderConfigValue(config[key])}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
+          </div>
         </div>
       );
     }
@@ -1791,6 +2265,55 @@
         );
       };
 
+      // Render ControllerRevision cards
+      const renderControllerRevisionCard = (item, i) => {
+        const name = item.metadata?.name || 'Unknown';
+        const age = item.metadata?.creationTimestamp ? new Date(item.metadata.creationTimestamp).toLocaleDateString() : '';
+        const analysis = item._controllerRevisionAnalysis || {};
+        const owner = analysis.owner || {};
+        const current = analysis.current || {};
+        const delta = current.delta || {};
+        const changedCount = delta.changedPathCount || 0;
+        const imagesAdded = delta.imagesAdded || [];
+        const imagesRemoved = delta.imagesRemoved || [];
+        const isLatest = !!analysis.isLatest;
+        const revision = item.revision ?? current.revision ?? '-';
+
+        return (
+          <div key={i} className="card" style={{ padding: '14px 18px', marginBottom: 8, cursor: 'pointer', transition: 'box-shadow 0.2s' }}
+            onClick={() => navigate(`/bundle/${bundleId}/ns/${ns}/controllerrevisions/${name}`)}
+            onMouseOver={e => e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)'}
+            onMouseOut={e => e.currentTarget.style.boxShadow = ''}
+          >
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4, flexWrap: 'wrap' }}>
+                  <StatusDot color={changedCount > 0 ? '#f59e0b' : '#10b981'} />
+                  <span style={{ fontWeight: 600, fontSize: 14 }}>{name}</span>
+                  <Chip color="#0ea5e9">rev {revision}</Chip>
+                  {isLatest && <Chip color="#10b981">latest</Chip>}
+                  {owner?.name && (
+                    <Chip color="#6366f1">
+                      {owner.kind || 'Owner'}: {owner.name}
+                    </Chip>
+                  )}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                  <span>{analysis.totalRevisions || 0} revision{(analysis.totalRevisions || 0) !== 1 ? 's' : ''} in timeline</span>
+                  <span>{changedCount} changed path{changedCount !== 1 ? 's' : ''} vs previous</span>
+                  {(imagesAdded.length > 0 || imagesRemoved.length > 0) && (
+                    <span>
+                      images +{imagesAdded.length}/-{imagesRemoved.length}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <span style={{ fontSize: 12, color: 'var(--text-secondary)', flexShrink: 0 }}>{age}</span>
+            </div>
+          </div>
+        );
+      };
+
       // Generic fallback card
       const renderGenericCard = (item, i) => {
         const name = item.metadata?.name || 'Unknown';
@@ -1831,6 +2354,8 @@
             return renderPVCCard(item, i);
           case 'persistentvolumes':
             return renderPVCard(item, i);
+          case 'controllerrevisions':
+            return renderControllerRevisionCard(item, i);
           default:
             return renderGenericCard(item, i);
         }
@@ -1847,6 +2372,10 @@
         if (['statefulsets', 'deployments', 'daemonsets', 'replicasets'].includes(type)) {
           const healthy = resources.filter(r => r._replicaStatus && r._replicaStatus.ready >= r._replicaStatus.desired && r._replicaStatus.desired > 0).length;
           return `${healthy}/${resources.length} healthy`;
+        }
+        if (type === 'controllerrevisions') {
+          const latestCount = resources.filter(r => r._controllerRevisionAnalysis?.isLatest).length;
+          return `${resources.length} revisions (${latestCount} latest markers)`;
         }
         return `${resources.length} item${resources.length !== 1 ? 's' : ''}`;
       };
@@ -2652,6 +3181,98 @@
         );
       };
 
+      const renderControllerRevisionDetails = () => {
+        const analysis = resource._controllerRevisionAnalysis || {};
+        const owner = analysis.owner || {};
+        const timeline = analysis.timeline || [];
+        const currentName = resource.metadata?.name;
+
+        if (!timeline.length) return null;
+
+        return (
+          <div className="card p-6 mb-6">
+            <h2 className="text-lg font-bold mb-4">Revision Timeline and Deltas</h2>
+            <DescField label="Controller">
+              {owner.kind || 'Unknown'}/{owner.name || 'unknown'}
+            </DescField>
+            <DescField label="Total Revisions">{analysis.totalRevisions || 0}</DescField>
+            <DescField label="Latest Revision">{String(analysis.latestRevision ?? '-')}</DescField>
+
+            <div className="mt-4 space-y-2">
+              {timeline.map((entry, idx) => {
+                const delta = entry.delta || {};
+                const important = entry.important || {};
+                const isCurrent = entry.name === currentName;
+                const isLatest = entry.revision === analysis.latestRevision;
+
+                return (
+                  <details key={idx} open={isCurrent} className="border rounded overflow-hidden">
+                    <summary className="px-3 py-2 cursor-pointer flex items-center gap-2"
+                      style={{backgroundColor: isCurrent ? 'var(--bg-tertiary)' : 'var(--bg-secondary)'}}
+                    >
+                      <span className="font-mono text-xs">rev {String(entry.revision ?? '-')}</span>
+                      <span className="font-semibold text-sm">{entry.name}</span>
+                      {isCurrent && <span className="text-xs px-2 py-0.5 rounded" style={{backgroundColor: '#0ea5e9', color: '#fff'}}>selected</span>}
+                      {isLatest && <span className="text-xs px-2 py-0.5 rounded" style={{backgroundColor: '#10b981', color: '#fff'}}>latest</span>}
+                      <span className="text-xs ml-auto" style={{color: 'var(--text-secondary)'}}>
+                        {entry.created ? new Date(entry.created).toLocaleString() : 'unknown time'}
+                      </span>
+                    </summary>
+                    <div className="px-3 py-3 text-sm">
+                      <div className="grid grid-cols-2 gap-3 text-xs mb-2">
+                        <div>Changed paths: <strong>{delta.changedPathCount || 0}</strong></div>
+                        <div>Data hash: <code>{entry.dataHash || '-'}</code></div>
+                        <div>Images added: <strong>{(delta.imagesAdded || []).length}</strong></div>
+                        <div>Images removed: <strong>{(delta.imagesRemoved || []).length}</strong></div>
+                      </div>
+
+                      {(delta.imagesAdded?.length > 0 || delta.imagesRemoved?.length > 0) && (
+                        <div className="mb-2 text-xs" style={{color: 'var(--text-secondary)'}}>
+                          {delta.imagesAdded?.length > 0 && <div>+ images: {delta.imagesAdded.join(', ')}</div>}
+                          {delta.imagesRemoved?.length > 0 && <div>- images: {delta.imagesRemoved.join(', ')}</div>}
+                        </div>
+                      )}
+
+                      {(delta.replicasBefore !== delta.replicasAfter) && (
+                        <div className="mb-2 text-xs" style={{color: 'var(--text-secondary)'}}>
+                          Replicas: {String(delta.replicasBefore ?? '-')} -&gt; {String(delta.replicasAfter ?? '-')}
+                        </div>
+                      )}
+
+                      {important.images?.length > 0 && (
+                        <div className="mb-2 text-xs" style={{color: 'var(--text-secondary)'}}>
+                          Effective images: {important.images.join(', ')}
+                        </div>
+                      )}
+
+                      {delta.changedPaths?.length > 0 ? (
+                        <div>
+                          <div className="text-xs font-semibold mb-1" style={{color: 'var(--text-secondary)'}}>Changed field paths (sample)</div>
+                          <div className="flex flex-wrap gap-1">
+                            {delta.changedPaths.map((path, i) => (
+                              <span key={i} className="px-2 py-0.5 rounded text-xs font-mono" style={{backgroundColor: 'var(--bg-tertiary)'}}>{path}</span>
+                            ))}
+                            {delta.truncatedPaths > 0 && (
+                              <span className="px-2 py-0.5 rounded text-xs" style={{backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)'}}>
+                                +{delta.truncatedPaths} more
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-xs" style={{color: 'var(--text-secondary)'}}>
+                          No field-level delta from previous revision.
+                        </div>
+                      )}
+                    </div>
+                  </details>
+                );
+              })}
+            </div>
+          </div>
+        );
+      };
+
       const renderWorkloadPodRelationship = () => {
         if (!['statefulsets', 'replicasets', 'deployments', 'daemonsets'].includes(type)) return null;
 
@@ -3076,6 +3697,9 @@
             )}
           </div>
 
+          {/* 1b. managedFields Ownership Analysis */}
+          <ManagedFieldsAnalysis findings={resource._managedFieldsFindings} />
+
           {/* 2. Annotations */}
           {annotationEntries.length > 0 && (
             <div className="card p-6 mb-6">
@@ -3119,6 +3743,7 @@
           {type === 'pods' && renderPodDetails()}
           {type === 'services' && renderServiceDetails()}
           {type === 'endpoints' && renderEndpointDetails()}
+          {type === 'controllerrevisions' && renderControllerRevisionDetails()}
 
           {/* 6. Events */}
           {events.length > 0 && (
@@ -3239,7 +3864,28 @@
             {checkingConfig ? (
               <div className="text-sm" style={{color: 'var(--text-secondary)'}}>Checking Gemini configuration...</div>
             ) : !hasGeminiApiKey ? (
-              <div className="text-sm text-red-600">Gemini API key not configured. Add GEMINI_API_KEY in config and restart web.sh.</div>
+              <div className="rounded border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-900 space-y-3">
+                <p className="font-semibold">Gemini API key is not configured.</p>
+                <ol className="list-decimal pl-5 space-y-1">
+                  <li>
+                    Create a Gemini API key from
+                    <a
+                      href="https://aistudio.google.com/app/apikey"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-1 text-blue-700 underline"
+                    >
+                      Google AI Studio
+                    </a>
+                    .
+                  </li>
+                  <li>Open the eck-glance config file and set GEMINI_API_KEY="YOUR_KEY".</li>
+                  <li>Relaunch the app with ./web.sh so the new key is loaded.</li>
+                </ol>
+                <p className="text-xs" style={{color: 'var(--text-secondary)'}}>
+                  Tip: you can copy config.example to config if needed, then update GEMINI_API_KEY.
+                </p>
+              </div>
             ) : (
               <button
                 onClick={runReview}
@@ -3276,6 +3922,7 @@
       const location = useLocation();
       const [events, setEvents] = useState([]);
       const [loading, setLoading] = useState(true);
+      const [viewMode, setViewMode] = useState('timeline');
       const [filterType, setFilterType] = useState('');
       const [namespaces, setNamespaces] = useState([]);
       const [selectedNs, setSelectedNs] = useState(ns || '');
@@ -3349,6 +3996,15 @@
         if (typeof va === 'number') return sortDir === 'asc' ? va - vb : vb - va;
         return sortDir === 'asc' ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
       });
+
+      const groupedEvents = sortedEvents.reduce((acc, event) => {
+        const key = event.kind || 'Unknown';
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(event);
+        return acc;
+      }, {});
+
+      const groupedKinds = Object.keys(groupedEvents).sort((a, b) => a.localeCompare(b));
 
       const counts = {
         total: events.length,
@@ -3433,11 +4089,71 @@
                 <option value="Error">Error</option>
               </select>
             </div>
+            <div>
+              <label className="block text-sm font-semibold mb-1">View</label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('timeline')}
+                  className={`px-3 py-2 border rounded text-sm ${viewMode === 'timeline' ? 'bg-brand-600 text-white border-brand-600' : ''}`}
+                >
+                  Timeline
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('kind')}
+                  className={`px-3 py-2 border rounded text-sm ${viewMode === 'kind' ? 'bg-brand-600 text-white border-brand-600' : ''}`}
+                >
+                  By Kind
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Events Table */}
           {loading ? (
             <div>Loading events...</div>
+          ) : viewMode === 'kind' ? (
+            <div className="space-y-4">
+              {groupedKinds.length === 0 ? (
+                <div className="card p-6 text-sm" style={{color: 'var(--text-secondary)'}}>No events found.</div>
+              ) : (
+                groupedKinds.map(kind => (
+                  <div key={kind} className="card overflow-hidden">
+                    <div className="px-4 py-3 border-b font-semibold flex items-center justify-between" style={{backgroundColor: 'var(--bg-secondary)'}}>
+                      <span>{kind}</span>
+                      <span className="text-xs" style={{color: 'var(--text-secondary)'}}>{groupedEvents[kind].length} events</span>
+                    </div>
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Type</th>
+                          <th>Reason</th>
+                          <th>Message</th>
+                          <th>Namespace</th>
+                          <th>Object</th>
+                          <th>Count</th>
+                          <th>Timestamp</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {groupedEvents[kind].map((e, idx) => (
+                          <tr key={`${kind}-${idx}`}>
+                            <td><StatusBadge status={e.type} /></td>
+                            <td>{e.reason || '-'}</td>
+                            <td className="text-sm" style={{maxWidth: '420px'}}>{e.message || '-'}</td>
+                            <td>{e.namespace || '-'}</td>
+                            <td>{e.name || '-'}</td>
+                            <td>{e.count || 1}</td>
+                            <td>{e.lastTimestamp ? new Date(e.lastTimestamp).toLocaleString() : '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))
+              )}
+            </div>
           ) : (
             <div className="card overflow-hidden">
               <table className="table">
@@ -3486,6 +4202,8 @@
       const [logs, setLogs] = useState('');
       const [loading, setLoading] = useState(false);
       const [logFilter, setLogFilter] = useState('');
+      const [regexMode, setRegexMode] = useState(false);
+      const [regexError, setRegexError] = useState('');
       const [viewMode, setViewMode] = useState('raw'); // 'raw' | 'structured'
       const [levelFilter, setLevelFilter] = useState('');
       const [sortColumn, setSortColumn] = useState('');
@@ -3637,8 +4355,17 @@
       const filteredLines = useMemo(() => {
         let lines = parsedLines.all;
         if (logFilter) {
-          const upper = logFilter.toUpperCase();
-          lines = lines.filter(l => l.raw.toUpperCase().includes(upper));
+          if (regexMode) {
+            try {
+              const re = new RegExp(logFilter, 'i');
+              lines = lines.filter(l => re.test(l.raw));
+            } catch(e) {
+              // invalid regex — return all lines (error shown in UI)
+            }
+          } else {
+            const upper = logFilter.toUpperCase();
+            lines = lines.filter(l => l.raw.toUpperCase().includes(upper));
+          }
         }
         if (levelFilter) {
           const lf = levelFilter.toLowerCase();
@@ -3651,7 +4378,7 @@
           });
         }
         return lines;
-      }, [parsedLines.all, logFilter, levelFilter]);
+      }, [parsedLines.all, logFilter, regexMode, levelFilter]);
 
       // Sort JSON lines based on sortColumn and sortDirection
       const sortedJsonLines = useMemo(() => {
@@ -3747,7 +4474,7 @@
           <h1 className="text-2xl font-bold mb-6">Logs</h1>
 
           <div className="text-xs mb-4" style={{ color: 'var(--text-secondary)' }}>
-            Note: Audit log entries are filtered out.
+            Note: Audit log entries are filtered out.  If the logs are HUGE and takes a long time to load you can view it in your uploads directory (default: /tmp/eck-glace-uploads)
           </div>
 
           {/* Filters */}
@@ -3797,14 +4524,34 @@
               )}
             </div>
             <div>
-              <label className="block text-sm font-semibold mb-1">Text Filter</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-sm font-semibold">Search / Filter</label>
+                <label className="flex items-center gap-1 text-xs cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={regexMode}
+                    onChange={e => { setRegexMode(e.target.checked); setRegexError(''); }}
+                    className="cursor-pointer"
+                  />
+                  Regex
+                </label>
+              </div>
               <input
                 type="text"
                 value={logFilter}
-                onChange={(e) => setLogFilter(e.target.value)}
-                placeholder="Search logs..."
-                className="w-full px-3 py-2 border rounded"
+                onChange={(e) => {
+                  setLogFilter(e.target.value);
+                  if (regexMode && e.target.value) {
+                    try { new RegExp(e.target.value); setRegexError(''); }
+                    catch(ex) { setRegexError(ex.message); }
+                  } else {
+                    setRegexError('');
+                  }
+                }}
+                placeholder={regexMode ? 'Enter regex pattern...' : 'Search logs...'}
+                className={`w-full px-3 py-2 border rounded ${regexError ? 'border-red-400' : ''}`}
               />
+              {regexError && <div className="text-xs text-red-500 mt-1">{regexError}</div>}
             </div>
             <div>
               <label className="block text-sm font-semibold mb-1">Level</label>
@@ -4211,24 +4958,8 @@
         }
       };
 
-      const layerConfig = {
-        0: { label: 'ECK CRDs' }, 1: { label: 'NodeSets' }, 2: { label: 'Workloads' }, 3: { label: 'Pods' },
-        4: { label: 'Network' }, 5: { label: 'ConfigMaps' }, 6: { label: 'Secrets' },
-        7: { label: 'PVCs' }, 8: { label: 'PVs' }, 9: { label: 'StorageClasses' }
-      };
-
       const uniqueLayers = [...new Set(graph.nodes.map(n => n.layer || 4))].sort((a, b) => a - b);
       const maxNodesInLayer = Math.max(...uniqueLayers.map(l => graph.nodes.filter(n => n.layer === l).length), 1);
-
-      const typeIcons = {
-        'elasticsearch': 'ES', 'kibana': 'KB', 'pod': 'Pod', 'service': 'Svc',
-        'configmap': 'CM', 'secret': 'Sec', 'pvc': 'PVC', 'deployment': 'Dep',
-        'statefulset': 'STS', 'agent': 'Agt', 'beat': 'Beat', 'apmserver': 'APM', 'logstash': 'LS',
-        'daemonset': 'DS', 'replicaset': 'RS', 'nodeset': 'NS',
-        'persistentvolumeclaim': 'PVC', 'persistentvolumeclaims': 'PVC',
-        'persistentvolume': 'PV', 'persistentvolumes': 'PV',
-        'storageclass': 'SC', 'storageclasses': 'SC'
-      };
 
       return (
         <div className="main-content p-4" style={{height: 'calc(100vh - 0px)', display: 'flex', flexDirection: 'column'}}>
@@ -4302,7 +5033,7 @@
                   const minY = Math.min(...yPositions) - nodeH/2 - 30;
                   const maxY = Math.max(...yPositions) + nodeH/2 + 30;
                   const centerX = (minX + maxX) / 2;
-                  const config = layerConfig[layer] || { label: `Layer ${layer}` };
+                  const config = { label: RESOURCE_GRAPH_LAYER_LABELS[layer] || `Layer ${layer}` };
                   return (
                     <g key={`layer-${layer}`}>
                       <rect x={minX} y={minY} width={maxX - minX} height={maxY - minY}
@@ -4358,7 +5089,7 @@
                   const nodeColor = getNodeColor(node);
                   const healthState = getHealthState(node.health);
                   const hc = healthColor(healthState);
-                  const icon = typeIcons[node.type] || node.type.substring(0, 3);
+                  const icon = RESOURCE_TYPE_ICONS[node.type] || node.type.substring(0, 3);
                   const displayName = node.name && node.name.length > 26 ? node.name.substring(0, 24) + '..' : node.name;
 
                   const handleClick = (e) => {
@@ -4709,23 +5440,48 @@
                   <div className="text-gray-500">No nodes found</div>
                 ) : (
                   <div className="grid gap-3">
-                    {nodeItems.map(item => (
-                      <div
-                        key={item.metadata?.name}
-                        className="card p-4 hover:shadow-md cursor-pointer transition"
-                        onClick={() => navigate(`/bundle/${bundleId}/cluster-resources/nodes/${item.metadata?.name}`)}
-                      >
-                        <div className="font-semibold text-brand-600">{item.metadata?.name}</div>
-                        <div className="text-sm text-gray-500 mt-1">
-                          Status: {item.status?.conditions?.find(c => c.type === 'Ready')?.status === 'True' ? 'Ready' : 'Not Ready'}
-                        </div>
-                        {item.status?.nodeInfo?.kubeletVersion && (
-                          <div className="text-sm text-gray-500">
-                            Kubelet: {item.status.nodeInfo.kubeletVersion}
+                    {nodeItems.map(item => {
+                      const nodeAnalysis = item._nodeAnalysis || {};
+                      const nodeConditions = item.status?.conditions || [];
+                      const isReady = nodeAnalysis.ready ?? (nodeConditions.find(c => c.type === 'Ready')?.status === 'True');
+                      const pressureConditions = nodeAnalysis.pressureConditions || nodeConditions.filter(c =>
+                        ['MemoryPressure','DiskPressure','PIDPressure','NetworkUnavailable'].includes(c.type) && c.status === 'True'
+                      );
+                      const nodeProblems = nodeAnalysis.problemConditions || nodeConditions.filter(c =>
+                        !['MemoryPressure','DiskPressure','PIDPressure','NetworkUnavailable','Ready'].includes(c.type) && c.status === 'True'
+                      );
+                      const internalIP = nodeAnalysis.addresses?.find(a => a.type === 'InternalIP')?.address || item.status?.addresses?.find(a => a.type === 'InternalIP')?.address;
+                      const osImage = nodeAnalysis.nodeInfo?.osImage || item.status?.nodeInfo?.osImage;
+                      return (
+                        <div
+                          key={item.metadata?.name}
+                          className="card p-4 hover:shadow-md cursor-pointer transition"
+                          onClick={() => navigate(`/bundle/${bundleId}/cluster-resources/nodes/${item.metadata?.name}`)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="font-semibold text-brand-600">{item.metadata?.name}</div>
+                            <span className={`px-2 py-0.5 rounded text-xs font-semibold ${isReady ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                              {isReady ? 'Ready' : 'Not Ready'}
+                            </span>
                           </div>
-                        )}
-                      </div>
-                    ))}
+                          <div className="text-sm text-gray-500 mt-1 flex flex-wrap gap-4">
+                            {internalIP && <span>IP: <span className="font-mono">{internalIP}</span></span>}
+                            {osImage && <span>{osImage}</span>}
+                            {item.status?.nodeInfo?.kubeletVersion && <span>Kubelet: {item.status.nodeInfo.kubeletVersion}</span>}
+                          </div>
+                          {(pressureConditions.length > 0 || nodeProblems.length > 0) && (
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {pressureConditions.map(c => (
+                                <span key={c.type} className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs font-semibold">{c.type}</span>
+                              ))}
+                              {nodeProblems.map(c => (
+                                <span key={c.type} className="px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded text-xs">{c.type}</span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -4996,6 +5752,9 @@
             </div>
           </div>
 
+          {/* 1b. managedFields Ownership Analysis */}
+          <ManagedFieldsAnalysis findings={resource._managedFieldsFindings} />
+
           {/* 2. Annotations */}
           {annotationEntries.length > 0 && (
             <div className="card p-6 mb-6">
@@ -5023,8 +5782,174 @@
             </div>
           )}
 
-          {/* 3. Status */}
-          <KVSection title="Status" data={status} defaultOpen={true} />
+          {/* 3. Node-specific structured view */}
+          {type === 'nodes' && (() => {
+            const nodeAnalysis = resource._nodeAnalysis || {};
+            const conditions = nodeAnalysis.conditionMap
+              ? (status.conditions || [])
+              : (status.conditions || []);
+            const stdConditionTypes = ['MemoryPressure','DiskPressure','PIDPressure','NetworkUnavailable','Ready'];
+            const stdConditions = stdConditionTypes.map(t => conditions.find(c => c.type === t)).filter(Boolean);
+            const extraConditions = conditions.filter(c => !stdConditionTypes.includes(c.type));
+            const addresses = nodeAnalysis.addresses || status.addresses || [];
+            const nodeInfo = nodeAnalysis.nodeInfo || status.nodeInfo || {};
+            const capacity = nodeAnalysis.capacity || status.capacity || {};
+            const allocatable = nodeAnalysis.allocatable || status.allocatable || {};
+            const volumesAttached = nodeAnalysis.volumesAttached || status.volumesAttached || [];
+            const elasticImages = nodeAnalysis.elasticImages || [];
+            const parseMemory = v => {
+              if (!v) return v;
+              const m = String(v).match(/^(\d+)Ki$/);
+              if (m) return (parseInt(m[1])*1024/1e9).toFixed(1) + ' GB';
+              return v;
+            };
+            return (
+              <>
+                {/* Node Info */}
+                <div className="card p-6 mb-6">
+                  <h2 className="text-lg font-bold mb-4">Node Info</h2>
+                  <div className="space-y-3">
+                    {nodeInfo.osImage && <DescField label="OS">{nodeInfo.osImage}</DescField>}
+                    {nodeInfo.kernelVersion && <DescField label="Kernel">{nodeInfo.kernelVersion}</DescField>}
+                    {nodeInfo.architecture && <DescField label="Architecture">{nodeInfo.architecture}</DescField>}
+                    {nodeInfo.containerRuntimeVersion && <DescField label="Container Runtime">{nodeInfo.containerRuntimeVersion}</DescField>}
+                    {nodeInfo.kubeletVersion && <DescField label="Kubelet">{nodeInfo.kubeletVersion}</DescField>}
+                    {nodeInfo.kubeProxyVersion && <DescField label="Kube Proxy">{nodeInfo.kubeProxyVersion}</DescField>}
+                  </div>
+                </div>
+
+                {/* Conditions */}
+                <div className="card p-6 mb-6">
+                  <h2 className="text-lg font-bold mb-4">Conditions</h2>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-gray-500 border-b">
+                        <th className="pb-2 font-medium">Type</th>
+                        <th className="pb-2 font-medium">Status</th>
+                        <th className="pb-2 font-medium">Message</th>
+                        <th className="pb-2 font-medium">Last Transition</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {stdConditions.map(c => {
+                        const isProblematic = c.type !== 'Ready' ? c.status === 'True' : c.status !== 'True';
+                        return (
+                          <tr key={c.type} className="border-b border-gray-50">
+                            <td className="py-2 font-medium">{c.type}</td>
+                            <td className="py-2">
+                              <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                                isProblematic ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                              }`}>{c.status}</span>
+                            </td>
+                            <td className="py-2 text-gray-500 text-xs max-w-xs truncate">{c.message || '-'}</td>
+                            <td className="py-2 text-gray-500 text-xs">{c.lastTransitionTime ? new Date(c.lastTransitionTime).toLocaleString() : '-'}</td>
+                          </tr>
+                        );
+                      })}
+                      {extraConditions.length > 0 && extraConditions.map(c => (
+                        <tr key={c.type} className="border-b border-gray-50">
+                          <td className="py-2 text-gray-600">{c.type}</td>
+                          <td className="py-2">
+                            <span className={`px-2 py-0.5 rounded text-xs ${
+                              c.status === 'True' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'
+                            }`}>{c.status}</span>
+                          </td>
+                          <td className="py-2 text-gray-500 text-xs max-w-xs truncate">{c.message || '-'}</td>
+                          <td className="py-2 text-gray-500 text-xs">{c.lastTransitionTime ? new Date(c.lastTransitionTime).toLocaleString() : '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Capacity & Allocatable */}
+                {(Object.keys(capacity).length > 0 || Object.keys(allocatable).length > 0) && (
+                  <div className="card p-6 mb-6">
+                    <h2 className="text-lg font-bold mb-4">Capacity &amp; Allocatable</h2>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-gray-500 border-b">
+                          <th className="pb-2 font-medium">Resource</th>
+                          <th className="pb-2 font-medium">Capacity</th>
+                          <th className="pb-2 font-medium">Allocatable</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.keys({...capacity, ...allocatable}).sort().map(key => (
+                          <tr key={key} className="border-b border-gray-50">
+                            <td className="py-2 font-mono text-xs">{key}</td>
+                            <td className="py-2 text-gray-700">{key === 'memory' ? parseMemory(capacity[key]) : capacity[key] || '-'}</td>
+                            <td className="py-2 text-gray-700">{key === 'memory' ? parseMemory(allocatable[key]) : allocatable[key] || '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Addresses */}
+                {addresses.length > 0 && (
+                  <div className="card p-6 mb-6">
+                    <h2 className="text-lg font-bold mb-4">Addresses</h2>
+                    <div className="space-y-2">
+                      {addresses.map((a, i) => (
+                        <div key={i} className="flex gap-3 text-sm">
+                          <span className="w-32 text-gray-500 font-medium">{a.type}</span>
+                          <span className="font-mono">{a.address}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Attached Volumes */}
+                {volumesAttached.length > 0 && (
+                  <div className="card p-6 mb-6">
+                    <h2 className="text-lg font-bold mb-4">Attached Volumes ({volumesAttached.length})</h2>
+                    <div className="space-y-1">
+                      {volumesAttached.map((v, i) => {
+                        const shortName = v.name ? v.name.replace(/^kubernetes\.io\/csi\/[^/]+\^/, '') : v.name;
+                        return (
+                          <div key={i} className="text-xs font-mono py-1 px-2 rounded bg-gray-50 truncate" title={v.name}>
+                            {shortName || v.name}
+                            {v.devicePath && <span className="text-gray-500 ml-2">→ {v.devicePath}</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Elastic Images */}
+                {elasticImages.length > 0 && (
+                  <div className="card p-6 mb-6">
+                    <h2 className="text-lg font-bold mb-4">Elastic Stack Images ({elasticImages.length})</h2>
+                    <div className="space-y-2">
+                      {elasticImages.map((img, i) => {
+                        const tagName = img.name || (img.names || []).find(n => !n.includes('@sha256')) || (img.names || [])[0] || '';
+                        const sizeMB = img.sizeBytes ? (img.sizeBytes / 1e6).toFixed(0) + ' MB' : '';
+                        return (
+                          <div key={i} className="text-xs font-mono py-1 px-2 rounded bg-blue-50 flex justify-between" title={tagName}>
+                            <span className="truncate">{tagName}</span>
+                            {sizeMB && <span className="text-gray-500 ml-2 flex-shrink-0">{sizeMB}</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
+
+          {/* 3. Status (raw) */}
+          {type !== 'nodes' && <KVSection title="Status" data={status} defaultOpen={true} />}
+          {type === 'nodes' && (
+            <details className="mb-6">
+              <summary className="cursor-pointer text-sm text-gray-500 hover:text-gray-700 py-1">Show raw Status JSON</summary>
+              <div className="mt-2"><KVSection title="Status" data={status} defaultOpen={false} /></div>
+            </details>
+          )}
 
           {/* 4. Specification */}
           <KVSection title="Specification" data={spec} defaultOpen={true} />
@@ -5101,6 +6026,7 @@
         <Routes>
           <Route path="/" element={<BundleListPage />} />
           <Route path="/bundle/:bundleId" element={<WithLayout Page={DashboardPage} />} />
+          <Route path="/bundle/:bundleId/eck" element={<WithLayout Page={EckInfoPage} />} />
           <Route path="/bundle/:bundleId/gemini-review" element={<WithLayout Page={GeminiReviewPage} />} />
           <Route path="/bundle/:bundleId/ns/:ns/:type" element={<WithLayout Page={ResourceListPage} />} />
           <Route path="/bundle/:bundleId/ns/:ns/:type/:name" element={<WithLayout Page={ResourceDetailPage} />} />

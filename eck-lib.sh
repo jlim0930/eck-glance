@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
-# eck-lib.sh - ECK Glance shared library
-# Provides helper functions and resource parsers for eck-glance
-# https://github.com/jlim0930/eck-glance
+# Shared helpers and parsers for eck-glance.
 
-# ==============================================================================
-# FORMATTING HELPERS
-# ==============================================================================
+# Formatting
 
-# Terminal colors (disabled if not a tty or NO_COLOR is set)
+# Disable colors for non-interactive output.
+# shellcheck disable=SC2034
+# Color constants are referenced by the parent script after sourcing this library.
 if [[ -t 1 ]] && [[ -z "${NO_COLOR:-}" ]]; then
   BOLD=$'\033[1m'
   RED=$'\033[0;31m'
@@ -19,7 +17,7 @@ else
   BOLD='' RED='' GREEN='' YELLOW='' CYAN='' RESET=''
 fi
 
-# Print a section header
+# Section header.
 print_header() {
   echo "========================================================================================="
   echo "$1"
@@ -27,24 +25,23 @@ print_header() {
   echo ""
 }
 
-# Print a sub-header
+# Sub-header.
 print_subheader() {
   echo "---------- $1 -----------------------------------------------------------------"
   echo ""
 }
 
-# Print a key-value field with consistent alignment
-# Usage: print_field "Label:" "value" [indent_width]
+# Aligned key-value field.
 print_field() {
   local label="$1"
   local value="${2:--}"
   local width="${3:-20}"
-  # Treat "null" from jq as empty
+  # Treat jq null as empty.
   [[ "${value}" == "null" || -z "${value}" ]] && value="-"
   printf "%-${width}s %s\n" "${label}" "${value}"
 }
 
-# Print an indented key-value field
+# Indented key-value field.
 print_field_indented() {
   local label="$1"
   local value="${2:--}"
@@ -54,7 +51,7 @@ print_field_indented() {
   printf "%s%-${width}s %s\n" "${indent}" "${label}" "${value}"
 }
 
-# Print a notes/tips box
+# Notes box.
 print_notes() {
   echo "========================================================================================="
   echo "NOTES:"
@@ -66,12 +63,9 @@ print_notes() {
   echo ""
 }
 
-# ==============================================================================
-# JQ HELPERS
-# ==============================================================================
+# jq helpers
 
-# Safe jq wrapper - returns "-" on error or null, suppresses stderr
-# Usage: safe_jq 'filter' file.json
+# Safe jq wrapper.
 safe_jq() {
   local filter="$1"
   local file="$2"
@@ -84,8 +78,7 @@ safe_jq() {
   fi
 }
 
-# Get item count from a JSON file, handling both .items and .Items (secrets anomaly)
-# Usage: get_item_count file.json
+# Get item count from .items or .Items.
 get_item_count() {
   local file="$1"
   local count
@@ -97,15 +90,13 @@ get_item_count() {
   fi
 }
 
-# Get item names from a JSON file
-# Usage: get_item_names file.json
+# Get item names.
 get_item_names() {
   local file="$1"
   jq -r '(.items // .Items)[]?.metadata.name // empty' "${file}" 2>/dev/null
 }
 
-# Check if a JSON file exists and has items
-# Usage: has_items file.json
+# Check whether a file has items.
 has_items() {
   local file="$1"
   [[ -f "${file}" ]] || return 1
@@ -114,22 +105,14 @@ has_items() {
   [[ "${count}" -gt 0 ]] 2>/dev/null
 }
 
-# ==============================================================================
-# TABLE FORMATTING
-# ==============================================================================
+# Tables
 
-# Render a jq-produced TSV table with column alignment
-# Pipe jq tsv output into this function
-# Usage: jq -r '...' file.json | render_table
+# Render TSV as a table.
 render_table() {
   column -ts $'\t' 2>/dev/null
 }
 
-# ==============================================================================
-# COMMON FIELD EXTRACTORS
-# These extract a single item's field using select by name
-# Usage: extract_field file.json item_name '.path.to.field'
-# ==============================================================================
+# Common extractors
 extract_field() {
   local file="$1"
   local name="$2"
@@ -137,11 +120,7 @@ extract_field() {
   safe_jq "(.items // .Items)[] | select(.metadata.name==\"${name}\") | (${path} // \"-\")" "${file}"
 }
 
-# ==============================================================================
-# LABELS & ANNOTATIONS PRINTER
-# Prints labels and annotations for a single item by index
-# Usage: print_labels_annotations file.json index [items_path]
-# ==============================================================================
+# Labels and annotations
 print_labels_annotations() {
   local file="$1"
   local index="$2"
@@ -159,12 +138,9 @@ print_labels_annotations() {
   echo ""
 }
 
-# ==============================================================================
-# EVENTS HELPERS
-# ==============================================================================
+# Event helpers
 
-# Print events filtered by kind/name from the events output file
-# Usage: print_events_for "Pod/my-pod-0" events_file
+# Print events for one resource.
 print_events_for() {
   local pattern="$1"
   local events_file="$2"
@@ -176,14 +152,9 @@ print_events_for() {
   fi
 }
 
-# ==============================================================================
-# CONTAINER / POD TEMPLATE HELPERS
-# These reduce massive duplication across statefulsets_2, deployments_2, daemonsets_2, pods_2
-# ==============================================================================
+# Container helpers
 
-# Print container details from a pod template spec
-# Usage: print_containers file.json item_name spec_prefix ["init"]
-# spec_prefix is like ".spec.template.spec" for statefulsets or ".spec" for pods
+# Print container details from a pod template.
 print_containers() {
   local file="$1"
   local name="$2"
@@ -293,8 +264,7 @@ print_containers() {
   done
 }
 
-# Print container statuses from a running pod
-# Usage: print_container_statuses file.json pod_name "containerStatuses"|"initContainerStatuses"
+# Print live container status.
 print_container_statuses() {
   local file="$1"
   local name="$2"
@@ -315,9 +285,7 @@ print_container_statuses() {
   " "${file}" 2>/dev/null | render_table
 }
 
-# Print volumes from a spec path
-# Usage: print_volumes file.json item_name spec_prefix
-# spec_prefix: ".spec.template.spec" or ".spec"
+# Print volumes from a spec path.
 print_volumes() {
   local file="$1"
   local name="$2"
@@ -375,9 +343,7 @@ print_volumes() {
   echo ""
 }
 
-# ==============================================================================
-# RESOURCE PARSERS - KUBERNETES NODES
-# ==============================================================================
+# Nodes
 
 parse_nodes() {
   local file="$1"
@@ -482,9 +448,7 @@ parse_nodes() {
   done
 }
 
-# ==============================================================================
-# RESOURCE PARSERS - EVENTS
-# ==============================================================================
+# Events
 
 parse_events() {
   local file="$1"
@@ -505,7 +469,7 @@ parse_events() {
   ' "${file}" 2>/dev/null | render_table
 }
 
-# Generate per-kind events summary from the events output file
+# Build a per-kind events view.
 parse_events_by_kind() {
   local events_output_file="$1"
   [[ -f "${events_output_file}" ]] || return 0
@@ -522,9 +486,7 @@ parse_events_by_kind() {
   done
 }
 
-# ==============================================================================
-# RESOURCE PARSERS - STORAGE CLASSES
-# ==============================================================================
+# Storage classes
 
 parse_storageclasses() {
   local file="$1"
@@ -544,9 +506,7 @@ parse_storageclasses() {
   echo ""
 }
 
-# ==============================================================================
-# RESOURCE PARSERS - ELASTICSEARCH
-# ==============================================================================
+# Elasticsearch
 
 parse_elasticsearch_summary() {
   local file="$1"
@@ -605,7 +565,13 @@ parse_elasticsearch_describe() {
     " _api=" + (.apiVersion // "-" | @sh) +
     " _gen=" + (.metadata.generation // "-" | tostring | @sh) +
     " _created=" + (.metadata.creationTimestamp // "-" | @sh)
-  ' "${file}" 2>/dev/null)"
+  ' "${file}" 2>/dev/null)" || true
+
+  _ns="${_ns:--}"
+  _kind="${_kind:--}"
+  _api="${_api:--}"
+  _gen="${_gen:--}"
+  _created="${_created:--}"
 
   print_field "Name:" "${name}"
   print_field "Namespace:" "${_ns}"
@@ -655,10 +621,7 @@ parse_elasticsearch_describe() {
   echo ""
 }
 
-# ==============================================================================
-# GENERIC DESCRIBE FUNCTION
-# Handles the common pattern for Kibana, Beat, Agent, APMServer, EnterpriseSearch, EMS, Logstash
-# ==============================================================================
+# Generic describe
 
 parse_generic_describe() {
   local file="$1"
@@ -694,9 +657,7 @@ parse_generic_describe() {
   echo ""
 }
 
-# ==============================================================================
-# RESOURCE PARSERS - KIBANA
-# ==============================================================================
+# Kibana
 
 parse_kibana_summary() {
   local file="$1"
@@ -744,9 +705,7 @@ parse_kibana_describe() {
   parse_generic_describe "$1" "$2" "$3" "Kibana"
 }
 
-# ==============================================================================
-# RESOURCE PARSERS - BEATS
-# ==============================================================================
+# Beats
 
 parse_beat_summary() {
   local file="$1"
@@ -795,9 +754,7 @@ parse_beat_describe() {
   parse_generic_describe "$1" "$2" "$3" "Beat"
 }
 
-# ==============================================================================
-# RESOURCE PARSERS - AGENT
-# ==============================================================================
+# Agents
 
 parse_agent_summary() {
   local file="$1"
@@ -847,9 +804,7 @@ parse_agent_describe() {
   parse_generic_describe "$1" "$2" "$3" "Agent"
 }
 
-# ==============================================================================
-# RESOURCE PARSERS - APM SERVER
-# ==============================================================================
+# APM Server
 
 parse_apmserver_summary() {
   local file="$1"
@@ -873,9 +828,7 @@ parse_apmserver_describe() {
   parse_generic_describe "$1" "$2" "$3" "APMServer"
 }
 
-# ==============================================================================
-# RESOURCE PARSERS - ENTERPRISE SEARCH
-# ==============================================================================
+# Enterprise Search
 
 parse_enterprisesearch_summary() {
   local file="$1"
@@ -899,9 +852,7 @@ parse_enterprisesearch_describe() {
   parse_generic_describe "$1" "$2" "$3" "EnterpriseSearch"
 }
 
-# ==============================================================================
-# RESOURCE PARSERS - ELASTIC MAPS SERVER
-# ==============================================================================
+# Elastic Maps Server
 
 parse_ems_summary() {
   local file="$1"
@@ -925,9 +876,7 @@ parse_ems_describe() {
   parse_generic_describe "$1" "$2" "$3" "ElasticMapsServer"
 }
 
-# ==============================================================================
-# RESOURCE PARSERS - LOGSTASH
-# ==============================================================================
+# Logstash
 
 parse_logstash_summary() {
   local file="$1"
@@ -952,9 +901,7 @@ parse_logstash_describe() {
   parse_generic_describe "$1" "$2" "$3" "Logstash"
 }
 
-# ==============================================================================
-# RESOURCE PARSERS - PODS
-# ==============================================================================
+# Pods
 
 parse_pods_summary() {
   local file="$1"
@@ -1205,9 +1152,7 @@ parse_pod_describe() {
   print_volumes "${file}" "${name}" ".spec"
 }
 
-# ==============================================================================
-# RESOURCE PARSERS - STATEFULSETS
-# ==============================================================================
+# StatefulSets
 
 parse_statefulsets_summary() {
   local file="$1"
@@ -1253,7 +1198,12 @@ parse_statefulset_describe() {
     " _replicas=" + (.spec.replicas // 1 | tostring | @sh) +
     " _ready=" + (.status.readyReplicas // 0 | tostring | @sh) +
     " _selector=" + ((.spec.selector.matchLabels | to_entries | map(.key + "=" + .value) | join(",")) // "-" | @sh)
-  ' "${file}" 2>/dev/null)"
+  ' "${file}" 2>/dev/null)" || true
+
+  _ns="${_ns:--}"
+  _replicas="${_replicas:-1}"
+  _ready="${_ready:-0}"
+  _selector="${_selector:--}"
 
   print_field "Name:" "${name}"
   print_field "Namespace:" "${_ns}"
@@ -1295,9 +1245,7 @@ parse_statefulset_describe() {
   echo ""
 }
 
-# ==============================================================================
-# RESOURCE PARSERS - DEPLOYMENTS
-# ==============================================================================
+# Deployments
 
 parse_deployments_summary() {
   local file="$1"
@@ -1347,7 +1295,15 @@ parse_deployment_describe() {
     " _available=" + (.status.availableReplicas // 0 | tostring | @sh) +
     " _selector=" + ((.spec.selector.matchLabels | to_entries | map(.key + "=" + .value) | join(",")) // "-" | @sh) +
     " _strategy=" + (.spec.strategy.type // "RollingUpdate" | @sh)
-  ' "${file}" 2>/dev/null)"
+  ' "${file}" 2>/dev/null)" || true
+
+  _ns="${_ns:--}"
+  _replicas="${_replicas:-1}"
+  _ready="${_ready:-0}"
+  _updated="${_updated:-0}"
+  _available="${_available:-0}"
+  _selector="${_selector:--}"
+  _strategy="${_strategy:-RollingUpdate}"
 
   print_field "Name:" "${name}"
   print_field "Namespace:" "${_ns}"
@@ -1389,9 +1345,7 @@ parse_deployment_describe() {
   echo ""
 }
 
-# ==============================================================================
-# RESOURCE PARSERS - DAEMONSETS
-# ==============================================================================
+# DaemonSets
 
 parse_daemonsets_summary() {
   local file="$1"
@@ -1433,7 +1387,12 @@ parse_daemonset_describe() {
     " _desired=" + (.status.desiredNumberScheduled // 0 | tostring | @sh) +
     " _ready=" + (.status.numberReady // 0 | tostring | @sh) +
     " _selector=" + ((.spec.selector.matchLabels | to_entries | map(.key + "=" + .value) | join(",")) // "-" | @sh)
-  ' "${file}" 2>/dev/null)"
+  ' "${file}" 2>/dev/null)" || true
+
+  _ns="${_ns:--}"
+  _desired="${_desired:-0}"
+  _ready="${_ready:-0}"
+  _selector="${_selector:--}"
 
   print_field "Name:" "${name}"
   print_field "Namespace:" "${_ns}"
@@ -1462,9 +1421,7 @@ parse_daemonset_describe() {
   echo ""
 }
 
-# ==============================================================================
-# RESOURCE PARSERS - REPLICASETS
-# ==============================================================================
+# ReplicaSets
 
 parse_replicasets_summary() {
   local file="$1"
@@ -1495,7 +1452,11 @@ parse_replicaset_describe() {
     "local _ns=" + (.metadata.namespace // "-" | @sh) +
     " _replicas=" + (.spec.replicas // 1 | tostring | @sh) +
     " _ready=" + (.status.readyReplicas // 0 | tostring | @sh)
-  ' "${file}" 2>/dev/null)"
+  ' "${file}" 2>/dev/null)" || true
+
+  _ns="${_ns:--}"
+  _replicas="${_replicas:-1}"
+  _ready="${_ready:-0}"
 
   print_field "Name:" "${name}"
   print_field "Namespace:" "${_ns}"
@@ -1510,9 +1471,7 @@ parse_replicaset_describe() {
   echo ""
 }
 
-# ==============================================================================
-# RESOURCE PARSERS - SERVICES
-# ==============================================================================
+# Services
 
 parse_services_summary() {
   local file="$1"
@@ -1591,9 +1550,7 @@ parse_services_describe() {
   fi
 }
 
-# ==============================================================================
-# RESOURCE PARSERS - CONFIGMAPS
-# ==============================================================================
+# ConfigMaps
 
 parse_configmaps_summary() {
   local file="$1"
@@ -1663,9 +1620,7 @@ parse_configmaps_describe() {
   fi
 }
 
-# ==============================================================================
-# RESOURCE PARSERS - SECRETS
-# ==============================================================================
+# Secrets
 
 parse_secrets_summary() {
   local file="$1"
@@ -1740,9 +1695,7 @@ parse_secrets_describe() {
   fi
 }
 
-# ==============================================================================
-# RESOURCE PARSERS - PERSISTENT VOLUME CLAIMS
-# ==============================================================================
+# PersistentVolumeClaims
 
 parse_pvcs_summary() {
   local file="$1"
@@ -1800,9 +1753,7 @@ parse_pvcs_describe() {
   fi
 }
 
-# ==============================================================================
-# RESOURCE PARSERS - PERSISTENT VOLUMES
-# ==============================================================================
+# PersistentVolumes
 
 parse_pvs_summary() {
   local file="$1"
@@ -1874,9 +1825,7 @@ parse_pvs_describe() {
   print_labels_annotations "${file}" "${name}"
 }
 
-# ==============================================================================
-# RESOURCE PARSERS - ENDPOINTS
-# ==============================================================================
+# Endpoints
 
 parse_endpoints_summary() {
   local file="$1"
@@ -1951,9 +1900,7 @@ parse_endpoints_describe() {
   print_labels_annotations "${file}" "${name}"
 }
 
-# ==============================================================================
-# RESOURCE PARSERS - CONTROLLER REVISIONS
-# ==============================================================================
+# ControllerRevisions
 
 parse_controllerrevisions_summary() {
   local file="$1"
@@ -1998,9 +1945,7 @@ parse_controllerrevisions_describe() {
   print_labels_annotations "${file}" "${name}"
 }
 
-# ==============================================================================
-# RESOURCE PARSERS - SERVICE ACCOUNTS
-# ==============================================================================
+# ServiceAccounts
 
 parse_serviceaccounts_summary() {
   local file="$1"
@@ -2062,10 +2007,7 @@ parse_serviceaccounts_describe() {
   print_labels_annotations "${file}" "${name}"
 }
 
-# ==============================================================================
-# GENERIC JSON FILE PROCESSOR
-# For unknown resource types not specifically handled
-# ==============================================================================
+# Generic JSON
 
 parse_generic_json() {
   local file="$1"
@@ -2115,11 +2057,9 @@ parse_generic_json() {
   done
 }
 
-# ==============================================================================
-# TEXT FILE PARSERS
-# ==============================================================================
+# Text files
 
-# Copy text files as-is with headers
+# Copy a text file with a header.
 parse_text_file() {
   local file="$1"
   local title="$2"
@@ -2131,7 +2071,7 @@ parse_text_file() {
   echo ""
 }
 
-# Parse eck-diagnostic-errors.txt and highlight issues
+# Parse diagnostic errors.
 parse_diagnostic_errors() {
   local file="$1"
   [[ -f "${file}" ]] || return 0
@@ -2146,9 +2086,7 @@ parse_diagnostic_errors() {
   echo ""
 }
 
-# ==============================================================================
-# ECK CLUSTERROLE VALIDATION
-# ==============================================================================
+# ClusterRole validation
 
 validate_eck_clusterroles() {
   local roles_file="$1"
@@ -2209,9 +2147,7 @@ validate_eck_clusterroles() {
   echo ""
 }
 
-# ==============================================================================
-# SUMMARY / OVERVIEW GENERATOR
-# ==============================================================================
+# Summary
 
 generate_summary() {
   local diag_dir="$1"
