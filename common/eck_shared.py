@@ -578,6 +578,21 @@ def normalize_events(events: List[dict], resource_name: Optional[str] = None) ->
 
 def build_gemini_review_prompt(summary: dict, user_notes: str = '') -> str:
     """Build the canonical Gemini review prompt from a bundle summary."""
+    custom_template = str(os.environ.get('ECK_GLANCE_GEMINI_REVIEW_PROMPT', '') or '').strip()
+    if custom_template:
+        summary_json = json.dumps(summary, indent=2, ensure_ascii=False)
+        notes_text = user_notes or 'None provided'
+        try:
+            return custom_template.format(user_notes=notes_text, summary_json=summary_json)
+        except Exception:
+            # Backward compatibility for templates without placeholders.
+            return (
+                f"{custom_template.rstrip()}\n\n"
+                f"User notes (optional):\n{notes_text}\n\n"
+                "Diagnostics summary JSON:\n"
+                f"{summary_json}"
+            )
+
     return (
         "You are a senior Elastic Support engineer and technical troubleshooting SME specializing in:\n"
         "- Elasticsearch\n"
