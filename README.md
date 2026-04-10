@@ -245,7 +245,6 @@ Current important settings:
 - `DEFAULT_THEME`: `light` or `dark`
 - `UPLOADS_DIR`: persistent temporary storage for uploaded/extracted bundles
 - `GEMINI_API_KEY`: optional API key for Gemini review features
-- `GEMINI_REVIEW_PROMPT`: optional shared prompt template for Gemini review in both CLI and web UI (`{user_notes}` and `{summary_json}` placeholders are supported)
 - `SSL_CERT_FILE`: optional CA bundle path for HTTPS requests made by the backend
 
 If you want to use Gemini review features, create an API key from [Google AI Studio](https://aistudio.google.com/app/apikey).
