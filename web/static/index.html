@@ -3876,6 +3876,8 @@
       const runReview = () => {
         setLoading(true);
         setError('');
+        setReview('');
+        setMeta(null);
         api.getGeminiReview(bundleId, notes)
           .then(result => {
             setReview(result.review || 'No review text returned.');
@@ -3906,6 +3908,7 @@
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
+              disabled={loading}
               rows={4}
               placeholder="Add symptoms, timeline, or what you already checked..."
               className="w-full p-3 border rounded mb-4"
@@ -3941,14 +3944,37 @@
               <button
                 onClick={runReview}
                 disabled={loading}
-                className="px-4 py-2 bg-brand-600 text-white rounded hover:bg-brand-700 disabled:opacity-60"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded hover:bg-brand-700 disabled:opacity-60"
               >
-                {loading ? 'Reviewing diagnostics...' : 'Review Diagnostics with Gemini'}
+                {loading && (
+                  <span
+                    className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/35 border-t-white"
+                    aria-hidden="true"
+                  />
+                )}
+                <span>{loading ? 'Reviewing diagnostics...' : 'Review Diagnostics with Gemini'}</span>
               </button>
             )}
 
             {error && <div className="mt-4 text-sm text-red-600">{error}</div>}
           </div>
+
+          {loading && (
+            <div className="card p-6 mb-6">
+              <div className="flex items-center gap-4">
+                <div
+                  className="h-10 w-10 animate-spin rounded-full border-4 border-brand-100 border-t-brand-600"
+                  aria-hidden="true"
+                />
+                <div>
+                  <div className="font-semibold">Waiting for Gemini</div>
+                  <div className="text-sm" style={{color: 'var(--text-secondary)'}}>
+                    Gemini is processing the diagnostics summary and generating a troubleshooting review.
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {review && (
             <div className="card p-6">

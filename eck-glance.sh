@@ -32,6 +32,7 @@ fi
 # Optional local config (same file used by web.sh)
 GEMINI_API_KEY="${GEMINI_API_KEY:-}"
 GEMINI_MODEL="${GEMINI_MODEL:-}"
+GEMINI_REVIEW_PROMPT="${GEMINI_REVIEW_PROMPT:-}"
 SSL_CERT_FILE="${SSL_CERT_FILE:-}"
 if [[ -f "${CONFIG_FILE}" ]]; then
   # shellcheck disable=SC1090
@@ -42,6 +43,9 @@ fi
 export ECK_GLANCE_GEMINI_API_KEY="${ECK_GLANCE_GEMINI_API_KEY:-${GEMINI_API_KEY:-}}"
 if [[ -n "${ECK_GLANCE_GEMINI_MODEL:-${GEMINI_MODEL:-}}" ]]; then
   export ECK_GLANCE_GEMINI_MODEL="${ECK_GLANCE_GEMINI_MODEL:-${GEMINI_MODEL}}"
+fi
+if [[ -n "${ECK_GLANCE_GEMINI_REVIEW_PROMPT:-${GEMINI_REVIEW_PROMPT:-}}" ]]; then
+  export ECK_GLANCE_GEMINI_REVIEW_PROMPT="${ECK_GLANCE_GEMINI_REVIEW_PROMPT:-${GEMINI_REVIEW_PROMPT}}"
 fi
 if [[ -n "${SSL_CERT_FILE:-}" ]]; then
   export SSL_CERT_FILE
@@ -169,6 +173,10 @@ DIAG_DIR="$(cd "${DIAG_DIR}" 2>/dev/null && pwd)" || {
 ERROR_COUNT=0
 PARSE_ERRORS=()
 ERROR_LOG_FILE=""
+GEMINI_REVIEW_FILE=""
+GEMINI_ERROR_FILE=""
+GEMINI_REVIEW_PID=""
+GEMINI_REVIEW_STARTED=false
 
 # Record parse errors without aborting.
 track_error() {
@@ -215,6 +223,47 @@ log_error() {
 
 log_warn() {
   echo -e "${YELLOW}[eck-glance] WARN:${RESET} $*" >&2
+}
+
+start_gemini_review_background() {
+  if [[ -z "${ECK_GLANCE_GEMINI_API_KEY:-}" ]]; then
+    log "Gemini review skipped (no GEMINI_API_KEY configured)"
+    return 0
+  fi
+
+  rm -f "${GEMINI_REVIEW_FILE}" "${GEMINI_ERROR_FILE}" 2>/dev/null || true
+  log "Starting Gemini review in background"
+  python3 "${SHARED_HELPER}" gemini-review "${DIAG_DIR}" > "${GEMINI_REVIEW_FILE}" 2> "${GEMINI_ERROR_FILE}" &
+  GEMINI_REVIEW_PID=$!
+  GEMINI_REVIEW_STARTED=true
+}
+
+finalize_gemini_review() {
+  if [[ "${GEMINI_REVIEW_STARTED}" != true || -z "${GEMINI_REVIEW_PID}" ]]; then
+    return 0
+  fi
+
+  # The process may have already been reaped by an earlier bare `wait` (e.g.
+  # fast-mode namespace jobs).  Only call wait if the process is still alive;
+  # suppress the "not a child of this shell" error in either case.
+  if kill -0 "${GEMINI_REVIEW_PID}" 2>/dev/null; then
+    log "Waiting for Gemini review to finish"
+    wait "${GEMINI_REVIEW_PID}" 2>/dev/null || true
+  fi
+
+  # Determine success from the output file, not from wait's exit code.
+  if [[ -s "${GEMINI_REVIEW_FILE}" ]]; then
+    log "Gemini review saved to: ${GEMINI_REVIEW_FILE}"
+    rm -f "${GEMINI_ERROR_FILE}" 2>/dev/null || true
+  elif [[ -s "${GEMINI_ERROR_FILE}" ]]; then
+    log_warn "Gemini review failed; see ${GEMINI_ERROR_FILE}"
+    rm -f "${GEMINI_REVIEW_FILE}" 2>/dev/null || true
+  else
+    log_warn "Gemini review returned empty output"
+    rm -f "${GEMINI_REVIEW_FILE}" "${GEMINI_ERROR_FILE}" 2>/dev/null || true
+  fi
+
+  GEMINI_REVIEW_PID=""
 }
 
 check_for_updates() {
@@ -291,6 +340,8 @@ validate_diag_dir "${DIAG_DIR}" || exit 1
 mkdir -p "${OUTPUT_DIR}"
 ERROR_LOG_FILE="${OUTPUT_DIR}/.eck-glance-parse-errors.tmp"
 : > "${ERROR_LOG_FILE}"
+GEMINI_REVIEW_FILE="${OUTPUT_DIR}/00_gemini-review.md"
+GEMINI_ERROR_FILE="${OUTPUT_DIR}/00_gemini-review.error.txt"
 
 log "ECK Glance v${VERSION}"
 log "Diagnostics: ${DIAG_DIR}"
@@ -319,6 +370,9 @@ if [[ -f "${DIAG_DIR}/version.json" ]]; then
   k8s_version=$(safe_jq '.ServerVersion.gitVersion' "${DIAG_DIR}/version.json")
   log "Kubernetes:   ${k8s_version}"
 fi
+
+start_gemini_review_background
+
 echo ""
 
 # Discover namespaces from subdirectories.
@@ -975,26 +1029,7 @@ log ""
 log "Generating summary overview"
 generate_summary "${DIAG_DIR}" "${NAMESPACES}" > "${OUTPUT_DIR}/00_summary.txt"
 
-# Optional Gemini review (auto-enabled when API key is configured)
-GEMINI_REVIEW_FILE="${OUTPUT_DIR}/00_gemini-review.md"
-GEMINI_ERROR_FILE="${OUTPUT_DIR}/00_gemini-review.error.txt"
-if [[ -n "${ECK_GLANCE_GEMINI_API_KEY:-}" ]]; then
-  log "Running Gemini review"
-  if python3 "${SHARED_HELPER}" gemini-review "${DIAG_DIR}" > "${GEMINI_REVIEW_FILE}" 2> "${GEMINI_ERROR_FILE}"; then
-    if [[ ! -s "${GEMINI_REVIEW_FILE}" ]]; then
-      log_warn "Gemini review returned empty output"
-      rm -f "${GEMINI_REVIEW_FILE}"
-    else
-      log "Gemini review saved to: ${GEMINI_REVIEW_FILE}"
-    fi
-    rm -f "${GEMINI_ERROR_FILE}"
-  else
-    log_warn "Gemini review failed; see ${GEMINI_ERROR_FILE}"
-    rm -f "${GEMINI_REVIEW_FILE}" 2>/dev/null || true
-  fi
-else
-  log "Gemini review skipped (no GEMINI_API_KEY configured)"
-fi
+finalize_gemini_review
 
 # Completion
 
