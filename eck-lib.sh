@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Shared helpers and parsers for eck-glance.
+# Library sourced by eck-glance.sh: terminal formatting, jq wrappers, and per-resource
+# parsers that turn namespace-level diagnostic JSON into kubectl-style text tables.
 
 # Formatting
 
@@ -899,6 +900,81 @@ parse_logstash_summary() {
 
 parse_logstash_describe() {
   parse_generic_describe "$1" "$2" "$3" "Logstash"
+}
+
+# StackConfigPolicy — ECK stack configuration policies (newer ECK versions)
+
+parse_stackconfigpolicy_summary() {
+  local file="$1"
+  has_items "${file}" || return 0
+
+  print_header "StackConfigPolicy - Summary"
+  jq -r '
+    [.items | sort_by(.metadata.name // "")[]
+    | {
+        "NAME": (.metadata.name // "-"),
+        "NAMESPACE": (.metadata.namespace // "-"),
+        "HEALTH": (.status.health // "-"),
+        "PHASE": (.status.phase // "-"),
+        "VERSION": (.status.version // "-"),
+        "CREATED": (.metadata.creationTimestamp // "-")
+      }] | if length > 0 then (.[0]|keys_unsorted|@tsv), (.[]|map(.)|@tsv) else empty end
+  ' "${file}" 2>/dev/null | render_table
+  echo ""
+}
+
+parse_stackconfigpolicy_describe() {
+  parse_generic_describe "$1" "$2" "$3" "StackConfigPolicy"
+}
+
+# PackageRegistry — Elastic Package Registry on ECK
+
+parse_packageregistry_summary() {
+  local file="$1"
+  has_items "${file}" || return 0
+
+  print_header "PackageRegistry - Summary"
+  jq -r '
+    [.items | sort_by(.metadata.name // "")[]
+    | {
+        "NAME": (.metadata.name // "-"),
+        "NAMESPACE": (.metadata.namespace // "-"),
+        "HEALTH": (.status.health // "-"),
+        "PHASE": (.status.phase // "-"),
+        "VERSION": (.status.version // "-"),
+        "CREATED": (.metadata.creationTimestamp // "-")
+      }] | if length > 0 then (.[0]|keys_unsorted|@tsv), (.[]|map(.)|@tsv) else empty end
+  ' "${file}" 2>/dev/null | render_table
+  echo ""
+}
+
+parse_packageregistry_describe() {
+  parse_generic_describe "$1" "$2" "$3" "PackageRegistry"
+}
+
+# AutoOpsAgentPolicy — AutoOps agents (ECK 2.16+)
+
+parse_autoopsagentpolicy_summary() {
+  local file="$1"
+  has_items "${file}" || return 0
+
+  print_header "AutoOpsAgentPolicy - Summary"
+  jq -r '
+    [.items | sort_by(.metadata.name // "")[]
+    | {
+        "NAME": (.metadata.name // "-"),
+        "NAMESPACE": (.metadata.namespace // "-"),
+        "HEALTH": (.status.health // "-"),
+        "PHASE": (.status.phase // "-"),
+        "VERSION": (.status.version // "-"),
+        "CREATED": (.metadata.creationTimestamp // "-")
+      }] | if length > 0 then (.[0]|keys_unsorted|@tsv), (.[]|map(.)|@tsv) else empty end
+  ' "${file}" 2>/dev/null | render_table
+  echo ""
+}
+
+parse_autoopsagentpolicy_describe() {
+  parse_generic_describe "$1" "$2" "$3" "AutoOpsAgentPolicy"
 }
 
 # Pods
@@ -2011,7 +2087,8 @@ parse_serviceaccounts_describe() {
 
 parse_generic_json() {
   local file="$1"
-  local resource_name="$2"  # e.g. "networkpolicies", "stackconfigpolicy"
+  # Display name in headings (often the basename without .json, e.g. networkpolicies)
+  local resource_name="$2"
   has_items "${file}" || return 0
 
   print_header "${resource_name} - Summary"
@@ -2233,6 +2310,20 @@ generate_summary() {
     if has_items "${ns_dir}/agent.json"; then
       echo "  Agents:"
       jq -r '.items[] | "    \(.metadata.name): health=\(.status.health // "unknown") available=\(.status.availableNodes // 0)/\(.status.expectedNodes // 0)"' "${ns_dir}/agent.json" 2>/dev/null
+    fi
+
+    # Newer ECK policy / registry CRDs (present when collector and ECK version support them)
+    if has_items "${ns_dir}/stackconfigpolicy.json"; then
+      echo "  StackConfigPolicy:"
+      jq -r '.items[] | "    \(.metadata.name): health=\(.status.health // "unknown") phase=\(.status.phase // "unknown")"' "${ns_dir}/stackconfigpolicy.json" 2>/dev/null
+    fi
+    if has_items "${ns_dir}/packageregistry.json"; then
+      echo "  PackageRegistry:"
+      jq -r '.items[] | "    \(.metadata.name): health=\(.status.health // "unknown") phase=\(.status.phase // "unknown")"' "${ns_dir}/packageregistry.json" 2>/dev/null
+    fi
+    if has_items "${ns_dir}/autoopsagentpolicy.json"; then
+      echo "  AutoOpsAgentPolicy:"
+      jq -r '.items[] | "    \(.metadata.name): health=\(.status.health // "unknown") phase=\(.status.phase // "unknown")"' "${ns_dir}/autoopsagentpolicy.json" 2>/dev/null
     fi
 
     # Pod health

@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 
-"""Shared canonical logic used by both eck-glance CLI and web backend."""
+"""Shared logic for ECK Glance (CLI helper + web backend).
+
+Defines canonical maps from API/type strings to diagnostic ``*.json`` filenames
+(including singular/plural aliases where the UI uses Kubernetes-style plurals),
+shared JSON list loading, namespace discovery, optional Gemini review for the
+CLI, managed-fields heuristics, and ControllerRevision reporting subcommands.
+"""
 
 from __future__ import annotations
 
@@ -13,7 +19,8 @@ import os
 from typing import Dict, List, Optional
 
 
-# Canonical namespace-level resource catalogs.
+# Maps API ``resource_type`` keys → filename under ``<bundle>/<namespace>/``.
+# SUMMARY drives namespace overview counts; DETAIL adds cluster-scoped files and plural aliases.
 NAMESPACE_RESOURCE_FILES_SUMMARY: Dict[str, str] = {
     'elasticsearch': 'elasticsearch.json',
     'kibana': 'kibana.json',
@@ -23,6 +30,9 @@ NAMESPACE_RESOURCE_FILES_SUMMARY: Dict[str, str] = {
     'enterprisesearch': 'enterprisesearch.json',
     'elasticmapsserver': 'elasticmapsserver.json',
     'logstash': 'logstash.json',
+    'stackconfigpolicy': 'stackconfigpolicy.json',
+    'packageregistry': 'packageregistry.json',
+    'autoopsagentpolicy': 'autoopsagentpolicy.json',
     'pods': 'pods.json',
     'statefulsets': 'statefulsets.json',
     'deployments': 'deployments.json',
@@ -43,6 +53,10 @@ NAMESPACE_RESOURCE_FILES_DETAIL: Dict[str, str] = {
     **NAMESPACE_RESOURCE_FILES_SUMMARY,
     'networkpolicies': 'networkpolicies.json',
     'storageclasses': 'storageclasses.json',
+    # Plural API path segments from TYPE_SINGULAR_TO_PLURAL / UI normalizeType → same JSON as singular.
+    'stackconfigpolicies': 'stackconfigpolicy.json',
+    'packageregistries': 'packageregistry.json',
+    'autoopsagentpolicies': 'autoopsagentpolicy.json',
 }
 
 CLUSTER_RESOURCE_FILES: Dict[str, str] = {
@@ -67,10 +81,14 @@ TYPE_SINGULAR_TO_PLURAL: Dict[str, str] = {
     'controllerrevision': 'controllerrevisions',
     'endpoint': 'endpoints',
     'networkpolicy': 'networkpolicies',
+    'stackconfigpolicy': 'stackconfigpolicies',
+    'packageregistry': 'packageregistries',
+    'autoopsagentpolicy': 'autoopsagentpolicies',
 }
 
 NAMESPACE_NAV_TYPES: List[str] = [
     'elasticsearch', 'kibana', 'beat', 'agent', 'apmserver', 'enterprisesearch', 'elasticmapsserver', 'logstash',
+    'stackconfigpolicy', 'packageregistry', 'autoopsagentpolicy',
     'pods', 'statefulsets', 'deployments', 'replicasets', 'daemonsets',
     'controllerrevisions',
     'services', 'endpoints', 'networkpolicies',
@@ -130,6 +148,12 @@ RESOURCE_TYPE_ICONS: Dict[str, str] = {
     'serviceaccounts': 'SA',
     'networkpolicy': 'NP',
     'networkpolicies': 'NP',
+    'stackconfigpolicy': 'SCP',
+    'stackconfigpolicies': 'SCP',
+    'packageregistry': 'EPR',
+    'packageregistries': 'EPR',
+    'autoopsagentpolicy': 'AOP',
+    'autoopsagentpolicies': 'AOP',
 }
 
 # Files that the Bash CLI already handles explicitly in process_namespace.
@@ -148,6 +172,9 @@ CLI_KNOWN_NAMESPACE_JSON_FILES: List[str] = [
     'events.json',
     'kibana.json',
     'logstash.json',
+    'stackconfigpolicy.json',
+    'packageregistry.json',
+    'autoopsagentpolicy.json',
     'persistentvolumeclaims.json',
     'persistentvolumes.json',
     'pods.json',
@@ -160,7 +187,7 @@ CLI_KNOWN_NAMESPACE_JSON_FILES: List[str] = [
 
 
 def read_items(filepath: str) -> List[dict]:
-    """Read K8s diagnostic JSON as normalized item list."""
+    """Load a diagnostics JSON file as a list of resource dicts (``items`` or legacy shapes)."""
     if not os.path.exists(filepath):
         return []
 
@@ -847,6 +874,7 @@ def _print_lines(values: List[str]) -> None:
 
 
 def main() -> int:
+    """Subcommands used by ``eck-glance.sh`` (namespace discovery, known JSON list, reports, Gemini)."""
     parser = argparse.ArgumentParser(description='Shared ECK helpers for CLI/backend.')
     subparsers = parser.add_subparsers(dest='command', required=True)
 

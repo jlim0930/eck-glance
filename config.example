@@ -1,5 +1,6 @@
-# ECK Glance launcher configuration
-# Loaded by web.sh from the same directory as this file.
+# ECK Glance runtime configuration (copy to ``config`` and edit).
+# web.sh sources this file to set port, theme, uploads directory, and Gemini options.
+# eck-glance.sh also sources ``config`` when present (Gemini / SSL-related exports).
 #
 # Default server port used when PORT env var and -p/--port are not set
 DEFAULT_PORT="3333"

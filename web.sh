@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Launch the ECK Glance web UI.
+# ECK Glance web launcher: source repo ``config``, export theme/uploads/Gemini env vars,
+# resolve an available TCP port when the default is busy, then exec python3 web/server.py.
 
 # Shell safety
 set -euo pipefail
@@ -233,31 +234,60 @@ cleanup() {
   exit "$exit_code"
 }
 
-# Port conflicts
+# Port conflicts — only stop a process we can identify as this ECK Glance server.
+eck_glance_owns_pid() {
+  local pid="$1"
+  local c=""
+  if command -v ps &>/dev/null; then
+    c="$(ps -p "${pid}" -o command= 2>/dev/null || true)"
+    [[ -z "${c}" ]] && c="$(ps -p "${pid}" -o args= 2>/dev/null || true)"
+  fi
+  [[ -z "${c}" ]] && return 1
+  case "${c}" in
+    *web/server.py*|*/server.py*eck*|*eck-glance*python*|*"ECK Glance"*) return 0 ;;
+  esac
+  if [[ "${c}" == *python* ]] && [[ "${c}" == *server.py* ]]; then
+    case "${c}" in
+      *eck*|*/web/*) return 0 ;;
+    esac
+  fi
+  return 1
+}
+
 if port_in_use "${PORT}"; then
   echo -e "${YELLOW}Port ${PORT} is already in use.${RESET}"
-  # Attempt to find the PID of the process using the port
-  EXISTING_PID=""
+  EXISTING_PIDS=""
   if command -v lsof &>/dev/null; then
-    # lsof can return the owning PID directly.
-    EXISTING_PID=$(lsof -ti :"${PORT}" 2>/dev/null || true)
+    EXISTING_PIDS=$(lsof -ti :"${PORT}" 2>/dev/null | tr '\n' ' ' || true)
   elif command -v ss &>/dev/null; then
-    # Extract the PID from ss output.
-    EXISTING_PID=$(ss -tlnp | grep ":${PORT} " | grep -oP 'pid=\K[0-9]+' || true)
+    EXISTING_PIDS=$(ss -tlnp 2>/dev/null | grep ":${PORT} " | grep -oP 'pid=\K[0-9]+' | tr '\n' ' ' || true)
   fi
-  if [[ -n "${EXISTING_PID}" ]]; then
-    echo -e "${YELLOW}Stopping existing process (PID: ${EXISTING_PID}) on port ${PORT}...${RESET}"
-    kill "${EXISTING_PID}" 2>/dev/null || true
-    sleep 1
-    # Force shutdown if it stays alive.
-    if kill -0 "${EXISTING_PID}" 2>/dev/null; then
-      kill -9 "${EXISTING_PID}" 2>/dev/null || true
-      sleep 0.5
+
+  KILLED_ANY=false
+  for PID_TRY in ${EXISTING_PIDS}; do
+    [[ -z "${PID_TRY}" ]] && continue
+    if eck_glance_owns_pid "${PID_TRY}"; then
+      echo -e "${YELLOW}Stopping existing ECK Glance server (PID ${PID_TRY}) on port ${PORT}...${RESET}"
+      kill "${PID_TRY}" 2>/dev/null || true
+      sleep 1
+      if kill -0 "${PID_TRY}" 2>/dev/null; then
+        kill -9 "${PID_TRY}" 2>/dev/null || true
+        sleep 0.5
+      fi
+      KILLED_ANY=true
+      break
     fi
+  done
+
+  if [[ "${KILLED_ANY}" == true ]]; then
     echo -e "${GREEN}Port ${PORT} is now free.${RESET}"
+  elif [[ -n "${EXISTING_PIDS}" ]]; then
+    echo -e "${RED}ERROR: Port ${PORT} is in use by another program (not this ECK Glance server).${RESET}"
+    echo -e "${RED}Free the port or use ${BOLD}-p${RESET}${RED} to choose a different port.${RESET}"
+    exit 1
   else
-    # Do not kill unknown processes.
-    echo -e "${RED}ERROR: Port ${PORT} is in use by an unknown process. Please free the port or use -p to specify a different port.${RESET}"
+    echo -e "${RED}ERROR: Port ${PORT} is in use but the owning process could not be identified.${RESET}"
+    echo -e "${RED}Free the port or use ${BOLD}-p${RESET}${RED} to choose a different port.${RESET}"
     exit 1
   fi
 fi

@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# Parse eck-diagnostics output into readable reports.
+# ECK Glance CLI: walk each namespace in an eck-diagnostics bundle, run jq parsers from
+# eck-lib.sh (and optional Python helpers from common/eck_shared.py), and write
+# eck-glance-output/ text reports. Supports zip input, parallel --fast mode, and --strict.
 
 set -uo pipefail
-# Avoid set -e because partial bundles can produce expected jq failures.
+# Intentionally no set -e: partial bundles may yield jq errors; errors are tracked instead.
 
+# Keep in sync with `web/version.py`
 VERSION="2.0.0"
 
 # Setup
@@ -64,13 +67,14 @@ usage() {
   echo "  eck-glance.sh [OPTIONS] [PATH]"
   echo ""
   printf "%bARGUMENTS:%b\n" "${BOLD}" "${RESET}"
-  echo "  PATH    Path to extracted eck-diagnostics directory (default: current directory)"
+  echo "  PATH    Path to extracted eck-diagnostics directory or a .zip bundle (default: current directory)"
   echo ""
   printf "%bOPTIONS:%b\n" "${BOLD}" "${RESET}"
   echo "  -o, --output DIR    Output directory (default: <diag-path>/eck-glance-output)"
   echo "  -f, --fast          Run parsing jobs in parallel (faster but uses more resources)"
   echo "  -q, --quiet         Suppress progress messages"
   echo "  --no-color          Disable colored output"
+  echo "  --strict            Exit with non-zero status if any parse errors occurred"
   echo "  -h, --help          Show this help message"
   echo "  -v, --version       Show version"
   echo ""
@@ -80,6 +84,9 @@ usage() {
   echo ""
   echo "  # Parse diagnostics with explicit path"
   echo "  eck-glance.sh /path/to/eck-diagnostics"
+  echo ""
+  echo "  # Parse a zip bundle (extracted to a temporary directory)"
+  echo "  eck-glance.sh /path/to/eck-diagnostics.zip"
   echo ""
   echo "  # Parse with custom output directory"
   echo "  eck-glance.sh -o /tmp/my-output /path/to/eck-diagnostics"
@@ -104,6 +111,13 @@ usage() {
   echo "      eck_kibana*.txt           - Kibana summary & per-instance describe"
   echo "      eck_beats*.txt            - Beat summary & per-beat describe"
   echo "      eck_agents*.txt           - Agent summary & per-agent describe"
+  echo "      eck_apmserver*.txt        - APM Server (if present)"
+  echo "      eck_enterprisesearch*.txt - Enterprise Search (if present)"
+  echo "      eck_elasticmapsserver*.txt- Elastic Maps Server (if present)"
+  echo "      eck_logstash*.txt         - Logstash (if present)"
+  echo "      eck_stackconfigpolicy*.txt - StackConfigPolicy (if present)"
+  echo "      eck_packageregistry*.txt  - PackageRegistry (if present)"
+  echo "      eck_autoopsagentpolicy*.txt - AutoOpsAgentPolicy (if present)"
   echo "      eck_pods.txt              - Pod summary"
   echo "      eck_pod-<name>.txt        - Per-pod describe"
   echo "      eck_statefulsets.txt      - StatefulSet summary"
@@ -133,6 +147,8 @@ DIAG_DIR=""
 OUTPUT_DIR=""
 FAST_MODE=false
 QUIET=false
+STRICT_MODE=false
+ZIP_EXTRACT_DIR=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -140,6 +156,7 @@ while [[ $# -gt 0 ]]; do
     -v|--version) echo "eck-glance v${VERSION}"; exit 0 ;;
     -f|--fast)    FAST_MODE=true; shift ;;
     -q|--quiet)   QUIET=true; shift ;;
+    --strict)     STRICT_MODE=true; shift ;;
     --no-color)   BOLD='' RED='' GREEN='' YELLOW='' CYAN='' RESET=''; shift ;;
     -o|--output)
       if [[ -z "${2:-}" ]]; then echo "ERROR: --output requires a directory argument"; exit 1; fi
@@ -162,11 +179,44 @@ done
 # Default to the current directory.
 [[ -z "${DIAG_DIR}" ]] && DIAG_DIR="$(pwd)"
 
-# Resolve an absolute diagnostics path.
-DIAG_DIR="$(cd "${DIAG_DIR}" 2>/dev/null && pwd)" || {
-  echo "ERROR: Cannot access directory: ${DIAG_DIR}"
-  exit 1
-}
+# Resolve path: directory, or extract .zip to a temp dir (same as web UI).
+if [[ -f "${DIAG_DIR}" ]]; then
+  case "${DIAG_DIR}" in
+    *.zip|*.ZIP)
+      _zip_abs="$(cd "$(dirname "${DIAG_DIR}")" 2>/dev/null && pwd)/$(basename "${DIAG_DIR}")"
+      echo -e "${CYAN}[eck-glance]${RESET} Detected zip bundle — extracting to a temporary directory"
+      ZIP_EXTRACT_DIR="$(python3 - "${_zip_abs}" <<'PY'
+import os, shutil, sys, tempfile, zipfile
+zip_path = os.path.abspath(sys.argv[1])
+d = tempfile.mkdtemp(prefix="eck-glance-zip-")
+with zipfile.ZipFile(zip_path) as z:
+    z.extractall(d)
+top = [x for x in os.listdir(d) if x not in (".", "..")]
+if len(top) == 1:
+    sub = os.path.join(d, top[0])
+    if os.path.isdir(sub):
+        for name in os.listdir(sub):
+            shutil.move(os.path.join(sub, name), os.path.join(d, name))
+        os.rmdir(sub)
+print(d)
+PY
+)" || {
+        log_error "Failed to extract zip bundle: ${_zip_abs}"
+        exit 1
+      }
+      DIAG_DIR="${ZIP_EXTRACT_DIR}"
+      ;;
+    *)
+      log_error "Expected a diagnostics directory or a .zip file; not a regular file: ${DIAG_DIR}"
+      exit 1
+      ;;
+  esac
+else
+  DIAG_DIR="$(cd "${DIAG_DIR}" 2>/dev/null && pwd)" || {
+    echo "ERROR: Cannot access directory: ${DIAG_DIR}"
+    exit 1
+  }
+fi
 
 # Errors
 
@@ -194,6 +244,9 @@ cleanup() {
   local exit_code=$?
   # Wait for any background jobs
   wait 2>/dev/null || true
+  if [[ -n "${ZIP_EXTRACT_DIR:-}" && -d "${ZIP_EXTRACT_DIR}" ]]; then
+    rm -rf "${ZIP_EXTRACT_DIR}"
+  fi
   if [[ ${exit_code} -ne 0 ]]; then
     log_error "eck-glance exited with code ${exit_code}"
   fi
@@ -227,7 +280,7 @@ log_warn() {
 
 start_gemini_review_background() {
   if [[ -z "${ECK_GLANCE_GEMINI_API_KEY:-}" ]]; then
-    log "Gemini review skipped (no GEMINI_API_KEY configured)"
+    log "Gemini review skipped (set GEMINI_API_KEY in config, or export ECK_GLANCE_GEMINI_API_KEY)"
     return 0
   fi
 
@@ -342,6 +395,25 @@ ERROR_LOG_FILE="${OUTPUT_DIR}/.eck-glance-parse-errors.tmp"
 : > "${ERROR_LOG_FILE}"
 GEMINI_REVIEW_FILE="${OUTPUT_DIR}/00_gemini-review.md"
 GEMINI_ERROR_FILE="${OUTPUT_DIR}/00_gemini-review.error.txt"
+
+# Extra bundle metadata from eck-diagnostics (helps correlate stack diags and collector behavior)
+if [[ -f "${DIAG_DIR}/manifest.json" ]]; then
+  {
+    echo "includedDiagnostics — artifacts recorded in manifest.json by eck-diagnostics"
+    echo "================================================================================="
+    jq -r '.includedDiagnostics[]? | "- [\(.diagType)] \(.diagPath // "")"' "${DIAG_DIR}/manifest.json" 2>/dev/null || echo "(could not parse includedDiagnostics)"
+    echo ""
+    echo "Manifest summary fields:"
+    jq '{diagVersion, collectionDate, toolVersion}' "${DIAG_DIR}/manifest.json" 2>/dev/null
+  } > "${OUTPUT_DIR}/00_manifest-included-diagnostics.txt"
+fi
+if [[ -f "${DIAG_DIR}/eck-diagnostics.log" ]]; then
+  {
+    echo "eck-diagnostics collector log (first 400 lines; full log remains in bundle root)"
+    echo "================================================================================="
+    head -400 "${DIAG_DIR}/eck-diagnostics.log"
+  } > "${OUTPUT_DIR}/00_eck-diagnostics-collection.log.txt"
+fi
 
 log "ECK Glance v${VERSION}"
 log "Diagnostics: ${DIAG_DIR}"
@@ -731,14 +803,20 @@ fi
 
 # Namespace processing
 
-# Process one namespace, optionally with nested parallelism.
+# Emit all text reports for one namespace (sequential or parallel jobs inside).
 process_namespace() {
   local namespace="$1"
+  local ns_index="${2:-}"
+  local ns_total="${3:-}"
   local NS_DIR="${DIAG_DIR}/${namespace}"
   local NS_OUTPUT="${OUTPUT_DIR}/${namespace}"
 
   log ""
-  log "Processing namespace: ${BOLD}${namespace}${RESET}"
+  if [[ "${FAST_MODE}" == true && -n "${ns_total}" && "${ns_total}" =~ ^[0-9]+$ && "${ns_total}" -gt 0 && -n "${ns_index}" ]]; then
+    log "Processing namespace (${ns_index}/${ns_total}): ${BOLD}${namespace}${RESET}"
+  else
+    log "Processing namespace: ${BOLD}${namespace}${RESET}"
+  fi
 
   mkdir -p "${NS_OUTPUT}"
 
@@ -789,6 +867,18 @@ process_namespace() {
     process_resource "${namespace}" "${NS_DIR}/logstash.json" \
       parse_logstash_summary parse_logstash_describe \
       "eck_logstash" "Logstash" "${EVENTS_FILE}" &
+
+    process_resource "${namespace}" "${NS_DIR}/stackconfigpolicy.json" \
+      parse_stackconfigpolicy_summary parse_stackconfigpolicy_describe \
+      "eck_stackconfigpolicy" "StackConfigPolicy" "${EVENTS_FILE}" &
+
+    process_resource "${namespace}" "${NS_DIR}/packageregistry.json" \
+      parse_packageregistry_summary parse_packageregistry_describe \
+      "eck_packageregistry" "PackageRegistry" "${EVENTS_FILE}" &
+
+    process_resource "${namespace}" "${NS_DIR}/autoopsagentpolicy.json" \
+      parse_autoopsagentpolicy_summary parse_autoopsagentpolicy_describe \
+      "eck_autoopsagentpolicy" "AutoOpsAgentPolicy" "${EVENTS_FILE}" &
 
     # Kubernetes resources.
 
@@ -917,6 +1007,18 @@ process_namespace() {
       parse_logstash_summary parse_logstash_describe \
       "eck_logstash" "Logstash" "${EVENTS_FILE}"
 
+    process_resource "${namespace}" "${NS_DIR}/stackconfigpolicy.json" \
+      parse_stackconfigpolicy_summary parse_stackconfigpolicy_describe \
+      "eck_stackconfigpolicy" "StackConfigPolicy" "${EVENTS_FILE}"
+
+    process_resource "${namespace}" "${NS_DIR}/packageregistry.json" \
+      parse_packageregistry_summary parse_packageregistry_describe \
+      "eck_packageregistry" "PackageRegistry" "${EVENTS_FILE}"
+
+    process_resource "${namespace}" "${NS_DIR}/autoopsagentpolicy.json" \
+      parse_autoopsagentpolicy_summary parse_autoopsagentpolicy_describe \
+      "eck_autoopsagentpolicy" "AutoOpsAgentPolicy" "${EVENTS_FILE}"
+
     # Kubernetes resources.
 
     # Pods.
@@ -1009,14 +1111,18 @@ process_namespace() {
 
 # Namespace fan-out
 
-while IFS= read -r namespace; do
+mapfile -t _NS_LIST <<< "${NAMESPACES}"
+_NS_TOTAL=${#_NS_LIST[@]}
+_NS_I=0
+for namespace in "${_NS_LIST[@]}"; do
   [[ -z "${namespace}" ]] && continue
+  ((_NS_I++)) || true
   if [[ "${FAST_MODE}" == true ]]; then
-    process_namespace "${namespace}" &
+    process_namespace "${namespace}" "${_NS_I}" "${_NS_TOTAL}" &
   else
-    process_namespace "${namespace}"
+    process_namespace "${namespace}" "${_NS_I}" "${_NS_TOTAL}"
   fi
-done <<< "${NAMESPACES}"
+done
 
 # Wait for namespace jobs in fast mode.
 if [[ "${FAST_MODE}" == true ]]; then
@@ -1056,6 +1162,11 @@ if [[ ${ERROR_COUNT} -gt 0 ]]; then
     log_warn "  - ${err}"
   done
   echo ""
+fi
+
+if [[ "${STRICT_MODE}" == true && ${ERROR_COUNT} -gt 0 ]]; then
+  log_error "Strict mode: exiting with status 1 because one or more parse steps failed."
+  exit 1
 fi
 
 log "Suggested analysis order:"

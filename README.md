@@ -1,11 +1,17 @@
 # eck-glance
 
-`eck-glance` makes extracted ECK diagnostics easier to work with in two ways:
+`eck-glance` makes ECK **diagnostic bundles** (the data produced by `eck-diagnostics`) easier to work with in two ways:
 
-1. `eck-glance.sh` converts the raw JSON bundle into human-readable text files.
-2. `web.sh` launches a local web UI for browsing the same diagnostics interactively.
+1. **`eck-glance.sh`** turns the raw JSON bundle on disk into human-readable text (summaries, per-resource describes, ownership checks, optional Gemini review).
+2. **`web.sh`** starts a local Python server and the **ECK Glance** single-page UI for browsing bundles, graphs, logs, and diagnostics interactively.
 
-This repo is intended for already extracted `eck-diagnostics` bundles, and `web.sh` can also open a `.zip` bundle directly.
+Point either tool at an **extracted bundle directory** or at a **`.zip`** of that bundle. The CLI unpacks zips to a temporary directory; the web server can accept uploads and unpack zips under your configured uploads directory.
+
+### Resource coverage
+
+Both paths understand the same core namespaces: Elasticsearch, Kibana, Beats, Elastic Agent, APM Server, Enterprise Search, Elastic Maps Server, Logstash, plus newer ECK CRDs when the bundle includes them (**StackConfigPolicy**, **PackageRegistry**, **AutoOpsAgentPolicy**), alongside standard workload and networking JSON (`pods`, `statefulsets`, `services`, and so on). Missing files are skipped; older bundles simply omit newer CRD JSON.
+
+**Web API note:** Detail URLs use a lowercase type segment. The UI normalizes Kubernetes kinds to **plural** path names where that mapping exists (for example `statefulsets`, `stackconfigpolicies`). The backend maps both singular and plural aliases for those ECK policy types to the same on-disk `*.json` files.
 
 ## What The Tools Do
 
@@ -47,13 +53,19 @@ No additional Python packages are required for the web UI.
 
 ## Repository Layout
 
-- `eck-glance.sh`: text parser entry point
-- `eck-lib.sh`: shared parsing helpers
-- `web.sh`: web UI launcher
-- `config`: runtime config used by `web.sh`
-- `config.example`: example config template
-- `web/server.py`: backend API and static server
-- `web/static/`: frontend assets
+| Path | Role |
+|------|------|
+| `eck-glance.sh` | CLI entry: orchestrates namespace parsing, parallelism, strict mode, zip input |
+| `eck-lib.sh` | `jq` parsers and formatters used by the CLI (`source`d from `eck-glance.sh`) |
+| `web.sh` | Loads `config`, exports env for the backend, picks a free port when needed, starts `web/server.py` |
+| `config` / `config.example` | Local runtime settings (port, theme, uploads dir, Gemini, TLS trust store) |
+| `common/eck_shared.py` | Canonical resource catalogs, JSON helpers, namespace discovery, managed-fields + ControllerRevision reports, Gemini invocation for CLI |
+| `web/server.py` | Thin process entry: `ThreadingHTTPServer` + `ECKGlanceHandler`, CLI args |
+| `web/server_support.py` | Bundle scanning, caching, enrichment, relationship graph + layout, multipart upload, Gemini HTTP client |
+| `web/eck_glance_handler.py` | `BaseHTTPRequestHandler` subclass: routes `/api/...` and static files |
+| `web/api_index.py` | Builds the JSON document returned by `GET /api` |
+| `web/version.py` | Single `__version__` string; keep in sync with `eck-glance.sh` |
+| `web/static/` | `index.html`, CSS, `js/eck-glance-ui.jsx` (React UI), `vendor/` (offline JS deps) |
 
 ## Install
 
@@ -64,9 +76,7 @@ chmod +x eck-glance.sh web.sh
 cp config.example config
 ```
 
-Edit `config` for your liking 
-
-Store your local runtime variables in `config`. The recommended flow is to copy `config.example` to `config` and edit `config` rather than modifying the example file directly.
+Edit `config` as needed. Prefer copying `config.example` to `config` and changing `config`, not editing the example file in place.
 
 ## Using `eck-glance.sh` for CLI Usage
 
@@ -76,13 +86,14 @@ Store your local runtime variables in `config`. The recommended flow is to copy 
 eck-glance.sh [OPTIONS] [PATH]
 ```
 
-`PATH` is the extracted `eck-diagnostics` directory. If omitted, the current directory is used.
+`PATH` is the extracted `eck-diagnostics` directory, or a **`.zip`** file containing that bundle. If omitted, the current directory is used (directory mode only).
 
 ### CLI Options
 
 - `-o, --output DIR`: write output to a custom directory
-- `-f, --fast`: run parsing jobs in parallel
+- `-f, --fast`: run parsing jobs in parallel (namespace progress is summarized in this mode)
 - `-q, --quiet`: suppress progress messages
+- `--strict`: exit with status 1 if any parse step recorded an error (see output warnings)
 - `--no-color`: disable colored terminal output
 - `-h, --help`: show help
 - `-v, --version`: show version
@@ -102,6 +113,12 @@ Parse a bundle explicitly:
 /path/to/eck-glance/eck-glance.sh /path/to/eck-diagnostics
 ```
 
+Parse a zip without extracting it yourself:
+
+```bash
+/path/to/eck-glance/eck-glance.sh /path/to/eck-diagnostics.zip
+```
+
 Write output somewhere else:
 
 ```bash
@@ -116,6 +133,8 @@ Use parallel mode on a larger workstation:
 
 ### CLI Expectations
 
+`GEMINI_API_KEY` in `config` is exported for helpers as `ECK_GLANCE_GEMINI_API_KEY`. You can set `ECK_GLANCE_GEMINI_API_KEY` in the environment instead; the CLI message when no key is present refers to both options.
+
 By default, output is written to:
 
 ```text
@@ -127,7 +146,7 @@ Common files you should expect:
 - `00_summary.txt`: high-level overview and health summary. Start here first.
 - `00_diagnostic-errors.txt`: collection or parsing issues detected in the bundle.
 - `00_clusterroles.txt`: cluster role validation notes.
-- `00_gemini-review.md`: if your gemini APIKEY is populated gemini review of the diag.
+- `00_gemini-review.md`: Gemini-generated review when `GEMINI_API_KEY` / `ECK_GLANCE_GEMINI_API_KEY` is set
 - `eck_nodes.txt`: worker/control-plane node info.
 - `eck_storageclasses.txt`: storage class summary.
 - `diagnostics/`: symlinks to Elasticsearch/Kibana/Agent diagnostics.
@@ -137,7 +156,9 @@ Common files you should expect:
 - `<namespace>/eck_services.txt`: service summary.
 - `<namespace>/eck_endpoints.txt`: endpoint summary.
 - `<namespace>/eck_statefulsets.txt`, `eck_deployments.txt`, `eck_daemonsets.txt`, `eck_replicasets.txt`: workload summaries.
-- `<namespace>/eck_elasticsearch*.txt`, `eck_kibana*.txt`, `eck_beats*.txt`, `eck_agents*.txt`: Elastic resource summaries and details.
+- `<namespace>/eck_elasticsearch*.txt`, `eck_kibana*.txt`, `eck_beats*.txt`, `eck_agents*.txt`, and matching `eck_*` files for other ECK CRDs present in the bundle (APM Server, Enterprise Search, Elastic Maps Server, Logstash).
+- `<namespace>/eck_stackconfigpolicys.txt`, `eck_packageregistrys.txt`, `eck_autoopsagentpolicys.txt`: summaries when those JSON files exist (plus per-resource `eck_<kind>-<name>.txt` describes).
+- `<namespace>/eck_networkpolicies.txt`: NetworkPolicy summary when collected.
 
 ### Recommended Triage Order
 
@@ -153,7 +174,7 @@ For most incidents, this is a practical reading order:
 
 ### What To Watch Out For
 
-- `eck-glance.sh` expects an extracted bundle directory, not a zip file.
+- Zip inputs are extracted to a temporary directory and removed when the CLI exits.
 - The script intentionally does not use `set -e`; partial parse failures are tracked and the run continues.
 - Missing JSON files or schema differences between bundle versions can produce partial output instead of a hard failure.
 - `--fast` uses more CPU and more simultaneous `jq` work. It is faster, but can be rough on smaller laptops.
@@ -206,6 +227,10 @@ Run on a custom port without auto-opening the browser:
 /path/to/eck-glance/web.sh -p 8080 --no-open /path/to/eck-diagnostics
 ```
 
+### Windows and WSL
+
+`web.sh` is a Bash script. On Windows, use **WSL**, **Git Bash**, or run the backend directly: `python3 web/server.py --port 3333` and open `http://127.0.0.1:3333` in a browser (no OS-level `open` shortcut unless you install one).
+
 ### What To Expect
 
 When `web.sh` starts successfully, it:
@@ -251,7 +276,7 @@ Current important settings:
 
 If you want to use Gemini review features, create an API key from [Google AI Studio](https://aistudio.google.com/app/apikey).
 
-Then place that value in `config` as `GEMINI_API_KEY="..."`.
+Then place that value in `config` as `GEMINI_API_KEY="..."`, or set **`ECK_GLANCE_GEMINI_API_KEY`** in the environment before starting `web.sh`. The web UI shows whether a key is loaded (it never displays the secret).
 
 Port precedence is:
 
@@ -259,12 +284,19 @@ Port precedence is:
 2. environment variable `PORT`
 3. `DEFAULT_PORT` from `config`
 
+### Security and networking
+
+- The backend listens on **`0.0.0.0`** (all interfaces) on the chosen port. Use it only on **trusted networks**; restrict access with host firewalls or SSH port forwarding when needed.
+- **Uploaded** diagnostic bundles are written under **`UPLOADS_DIR`** (default `/tmp/eck-glance-uploads`). Treat that directory like sensitive customer data.
+- `GET /api` returns a small JSON discovery document (routes and the same security reminders).
+
 ### Web Watchouts
 
-- If the target port is already in use, `web.sh` will try to stop the existing process when it can identify it.
+- If the target port is already in use, `web.sh` stops the process **only when the command line looks like this app** (for example `python` running `web/server.py`). It does **not** kill unrelated programs on that port.
 - If the port is used by an unknown process, the script exits instead of killing something blindly.
 - Uploaded bundles are stored under `UPLOADS_DIR`, which defaults to `/tmp/eck-glance-uploads`.
 - On macOS, browser opening uses `open`; on Linux it uses `xdg-open` if available.
+- Core UI scripts (**React, Babel, Marked, DOMPurify, Tailwind**) are vendored under `web/static/vendor/` so the UI works **offline** without third-party CDNs. You still need the local Python process for `/api`.
 - If you change `config`, restart `web.sh` so the backend and frontend pick up the new defaults.
 - Theme, graph, and resource health behavior are driven from the local server code and the diagnostics bundle, so stale browser tabs may not reflect backend fixes until you reload.
 

@@ -1,3 +1,5 @@
+    /* ECK Glance global styles: theme tokens via [data-theme], layout for sidebar and graph views */
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
       -webkit-font-smoothing: antialiased;
@@ -778,4 +780,39 @@
       background-color: var(--bg-tertiary) !important;
       color: var(--text-primary) !important;
       border-color: var(--border-primary) !important;
+    }
+
+    /* Keyboard focus — visible focus rings for interactive controls */
+    a:focus-visible,
+    button:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible,
+    summary:focus-visible,
+    [role="button"]:focus-visible {
+      outline: 2px solid var(--border-focus);
+      outline-offset: 2px;
+    }
+
+    .sidebar-nav-link:focus-visible,
+    .sidebar-ns-link:focus-visible,
+    .sidebar-bundle-card:focus-visible,
+    .text-link:focus-visible {
+      outline: 2px solid var(--border-focus);
+      outline-offset: 2px;
+    }
+
+    .app-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 40;
+      padding: 0.35rem 0.75rem;
+      font-size: 0.7rem;
+      line-height: 1.3;
+      color: var(--text-tertiary);
+      background: var(--bg-tertiary);
+      border-top: 1px solid var(--border-primary);
+      text-align: center;
     }
